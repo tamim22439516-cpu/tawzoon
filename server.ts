@@ -32,11 +32,13 @@ const app = express();
 const isDevContainer = Boolean(process.env.NGINX_PORT);
 const isProduction = process.env.NODE_ENV === 'production' || !isDevContainer || Boolean(process.env.K_SERVICE);
 
-// In AI Studio environment (both dev and deployed containers), Nginx listens on 8080 and proxies to 3000.
-// Node server binds to DEFAULT_APP_PORT (3000) or Cloud Run's PORT (8080) when running directly.
+// In AI Studio environment (both dev and deployed/published containers), Nginx listens on 8080 and proxies to 3000.
+// Cloud Run injects PORT=8080 into the environment, but Nginx is already bound to 8080 in the container!
+// Therefore, the Node application server must always bind to port 3000 (or DEFAULT_APP_PORT if explicitly overridden).
+// If process.env.PORT is 8080, binding to it causes a fatal EADDRINUSE conflict with Nginx and crashes Cloud Run deployment.
 const PORT = process.env.DEFAULT_APP_PORT 
   ? parseInt(process.env.DEFAULT_APP_PORT, 10) 
-  : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
+  : (process.env.PORT && process.env.PORT !== '8080' ? parseInt(process.env.PORT, 10) : 3000);
 
 // Real-time SSE Manager for Live Admin & Reseller updates
 const realtimeClients = new Set<Response>();
@@ -535,18 +537,138 @@ app.post('/api/public/visual-search', async (req: Request, res: Response) => {
   const state = db.getState();
   const allActiveProducts = (state.products || []).filter(p => p.isActive && !p.isArchived);
 
-  let detectedItem: any = {
-    detectedCategory: 'shop',
-    itemTypeBn: 'পণ্য',
-    itemTypeEn: 'Product',
-    colors: [],
-    keywords: [],
-    descriptionBn: 'ছবি অনুযায়ী মিল পাওয়া পণ্যসমূহ'
-  };
+  if (allActiveProducts.length === 0) {
+    return res.json({
+      success: true,
+      detectedItem: {
+        itemTypeBn: 'কোনো মিল পাওয়া যায়নি',
+        descriptionBn: 'ক্যাটালগে বর্তমানে কোনো সক্রিয় পণ্য নেই।',
+        colors: [],
+        keywords: [],
+        detectedCategory: null,
+      },
+      matchedProducts: [],
+    });
+  }
 
+  // 1. Convert uploaded query image to buffer
+  let queryBuffer: Buffer;
   try {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-    if (apiKey) {
+    queryBuffer = Buffer.from(cleanBase64, 'base64');
+  } catch {
+    return res.status(400).json({ error: 'Invalid base64 image data' });
+  }
+
+  // Helper for Sharp perceptual difference hash & normalized pixel buffer
+  async function getFingerprint(buf: Buffer) {
+    try {
+      const normBuffer = await sharp(buf)
+        .resize(32, 32, { fit: 'fill' })
+        .removeAlpha()
+        .raw()
+        .toBuffer();
+
+      const gray16 = await sharp(buf)
+        .resize(17, 16, { fit: 'fill' })
+        .grayscale()
+        .raw()
+        .toBuffer();
+
+      let dhash = '';
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+          dhash += (gray16[y * 17 + x] > gray16[y * 17 + x + 1] ? '1' : '0');
+        }
+      }
+      return { normBuffer, dhash };
+    } catch {
+      return null;
+    }
+  }
+
+  function hammingDistance(h1: string, h2: string) {
+    let dist = 0;
+    for (let i = 0; i < h1.length; i++) {
+      if (h1[i] !== h2[i]) dist++;
+    }
+    return dist;
+  }
+
+  function pixelSimilarity(b1: Buffer, b2: Buffer) {
+    let totalDiff = 0;
+    for (let i = 0; i < b1.length; i++) {
+      totalDiff += Math.abs(b1[i] - b2[i]);
+    }
+    return 100 * (1 - totalDiff / (b1.length * 255));
+  }
+
+  let matchedProductId: string | null = null;
+  let matchScore = 0;
+  let matchReason = '';
+
+  // 2. Perform Sharp visual fingerprint matching against all active catalog products' images
+  const queryFp = await getFingerprint(queryBuffer);
+  let bestFingerprintMatch: { product: any; score: number; dist: number; sim: number } | null = null;
+
+  if (queryFp) {
+    for (const p of allActiveProducts) {
+      const imgs = p.images && p.images.length > 0 ? p.images : (p.imageUrl ? [{ url: p.imageUrl }] : []);
+      let minProductDist = 999;
+      let maxProductSim = 0;
+
+      for (const img of imgs) {
+        const url = typeof img === 'string' ? img : img?.url;
+        if (!url) continue;
+        let buf: Buffer | null = null;
+        if (url.startsWith('data:image')) {
+          const parts = url.split(',');
+          if (parts[1]) buf = Buffer.from(parts[1], 'base64');
+        } else if (url.startsWith('/')) {
+          const fullPath = path.join(__dirname, 'public', url);
+          if (fs.existsSync(fullPath)) buf = fs.readFileSync(fullPath);
+        }
+
+        if (buf) {
+          const pFp = await getFingerprint(buf);
+          if (pFp) {
+            const d = hammingDistance(queryFp.dhash, pFp.dhash);
+            const s = pixelSimilarity(queryFp.normBuffer, pFp.normBuffer);
+            if (d < minProductDist) minProductDist = d;
+            if (s > maxProductSim) maxProductSim = s;
+          }
+        }
+      }
+
+      // Check for reliable match:
+      let isMatch = false;
+      let score = 0;
+      if (minProductDist <= 28) {
+        isMatch = true;
+        score = Math.min(99, Math.round(99 - minProductDist));
+      } else if (minProductDist <= 42 && maxProductSim >= 78) {
+        isMatch = true;
+        score = Math.round(maxProductSim * 0.95);
+      } else if (minProductDist <= 50 && maxProductSim >= 85) {
+        isMatch = true;
+        score = Math.round(maxProductSim * 0.92);
+      }
+
+      if (isMatch && (!bestFingerprintMatch || score > bestFingerprintMatch.score)) {
+        bestFingerprintMatch = { product: p, score, dist: minProductDist, sim: maxProductSim };
+      }
+    }
+  }
+
+  if (bestFingerprintMatch) {
+    matchedProductId = bestFingerprintMatch.product.id;
+    matchScore = bestFingerprintMatch.score;
+    matchReason = `${bestFingerprintMatch.product.nameBn} এর ছবির সাথে নিখুঁত মিল পাওয়া গেছে`;
+  }
+
+  // 3. Optional Gemini AI Vision Check if apiKey is available
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  if (apiKey) {
+    try {
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({
         apiKey: apiKey,
@@ -556,6 +678,29 @@ app.post('/api/public/visual-search', async (req: Request, res: Response) => {
           }
         }
       });
+
+      const catalogInventory = allActiveProducts.map(p => ({
+        id: p.id,
+        productCode: p.productCode,
+        nameBn: p.nameBn,
+        nameEn: p.nameEn,
+        categorySlug: p.categorySlug,
+        subcategoryBn: p.subcategoryBn || '',
+      }));
+
+      const aiPrompt = `You are a visual search matching engine for an e-commerce catalog in Bangladesh.
+Compare this image against our catalog list:
+${JSON.stringify(catalogInventory)}
+
+RULES:
+1. If the image is a person's photo, face, portrait, selfie, passport picture, animal, landscape, receipt, or NOT a commercial product:
+   Set "isProductMatch": false, "matchedProductId": null, "confidence": 0, "descriptionBn": "ছবির সাথে কোনো মিল পাওয়া যায়নি।"
+2. If it is a product, find if it specifically matches one of the catalog products above. If it does not reliably match any catalog product, set "isProductMatch": false, "matchedProductId": null, "confidence": 0.
+3. If it matches a specific catalog product, return its exact id in "matchedProductId" and "confidence" (75-99).
+
+Return JSON ONLY:
+{ "isProductMatch": boolean, "matchedProductId": string | null, "confidence": number, "itemTypeBn": string, "descriptionBn": string }`;
+
       const response = await callGeminiWithModelFallback(ai, {
         contents: [
           {
@@ -567,18 +712,7 @@ app.post('/api/public/visual-search', async (req: Request, res: Response) => {
                   data: cleanBase64,
                 },
               },
-              {
-                text: `You are an AI visual product recognition engine for 'TAWZOON NEXUS' e-commerce platform in Bangladesh.
-Analyze the product in this image and return a JSON object with:
-1. "detectedCategory": 'shop' (clothing/fashion), 'gadgets' (tech/electronics), or 'others' (home/kitchen/lifestyle).
-2. "itemTypeBn": Specific product category or name in Bengali (e.g., 'কাতুয়া', 'পোলো শার্ট', 'পাঞ্জাবি', 'ড্রপশোল্ডার টি-শার্ট', 'স্মার্টওয়াচ', 'পাওয়ার ব্যাংক', 'লুঙ্গি', 'থ্রি-পিস', 'হেডফোন', 'হ্যান্ডব্যাগ', 'জুতো', 'ঘড়ি', 'টি-শার্ট', 'ট্রিমার', 'পারফিউম', 'বেল্ট', 'ওয়ালেট').
-3. "itemTypeEn": Specific product category or name in English.
-4. "colors": Dominant colors array in Bengali & English (e.g. ["কালো", "Black", "সাদা"]).
-5. "keywords": Array of 5-8 descriptive search keywords in Bengali & English.
-6. "descriptionBn": 1 concise friendly sentence in Bengali describing the detected item.
-Return ONLY valid JSON matching this exact structure:
-{"detectedCategory":"shop","itemTypeBn":"কাতুয়া","itemTypeEn":"Katua","colors":["কালো","Black"],"keywords":["কাতুয়া","পোশাক","সুতি","কালো","fashion"],"descriptionBn":"কালো রঙের আকর্ষণীয় সুতি কাতুয়া পোশাক"}`
-              },
+              { text: aiPrompt },
             ],
           },
         ],
@@ -587,84 +721,76 @@ Return ONLY valid JSON matching this exact structure:
         },
       });
 
-      if (response.text) {
-        try {
-          const parsed = JSON.parse(response.text);
-          if (parsed && typeof parsed === 'object') {
-            detectedItem = { ...detectedItem, ...parsed };
+      if (response && response.text) {
+        const parsed = JSON.parse(response.text);
+        if (parsed && parsed.isProductMatch && parsed.matchedProductId) {
+          const geminiProduct = allActiveProducts.find(p => p.id === parsed.matchedProductId);
+          if (geminiProduct) {
+            matchedProductId = geminiProduct.id;
+            matchScore = Math.min(99, Math.max(80, parsed.confidence || 95));
+            matchReason = parsed.descriptionBn || `${geminiProduct.nameBn} এর সাথে চমৎকার মিল পাওয়া গেছে`;
           }
-        } catch {
-          // JSON parse fallback
+        } else if (parsed && parsed.isProductMatch === false) {
+          matchedProductId = null;
         }
       }
+    } catch (aiErr) {
+      console.warn('[VisualSearch] Gemini call note:', (aiErr as any)?.message || aiErr);
     }
-  } catch (err) {
-    console.warn('[VisualSearch] AI analysis note:', (err as any)?.message || err);
   }
 
-  // Perform intelligent ranking & scoring against catalog products
-  const scoredProducts = allActiveProducts.map((p) => {
-    let score = 35; // base score
-    const pNameBn = (p.nameBn || '').toLowerCase();
-    const pNameEn = (p.nameEn || '').toLowerCase();
-    const pSubBn = (p.subcategoryBn || '').toLowerCase();
-    const pSubEn = (p.subcategoryEn || '').toLowerCase();
-    const pDescBn = (p.shortDescBn || '' + p.fullDescBn || '').toLowerCase();
-    const pCat = (p.categorySlug || '').toLowerCase();
+  // 4. If no reliable match found, return empty results
+  if (!matchedProductId) {
+    return res.json({
+      success: true,
+      detectedItem: {
+        itemTypeBn: 'কোনো মিল পাওয়া যায়নি',
+        descriptionBn: 'ছবির সঙ্গে মিলে যাওয়ার মতো কোনো নির্দিষ্ট প্রোডাক্ট পাওয়া যায়নি।',
+        colors: [],
+        keywords: [],
+        detectedCategory: null,
+      },
+      matchedProducts: [],
+    });
+  }
 
-    // Category match
-    if (detectedItem.detectedCategory && pCat.includes(detectedItem.detectedCategory.toLowerCase())) {
-      score += 20;
-    }
+  // 5. If reliable match found, return the exact matched product and its direct variants only
+  const primaryProduct = allActiveProducts.find(p => p.id === matchedProductId)!;
+  const primaryCode = (primaryProduct.productCode || '').trim().toLowerCase();
+  const primaryName = (primaryProduct.nameBn || '').trim().toLowerCase();
+  const primaryOrigId = primaryProduct.originalProductId || primaryProduct.id;
 
-    // Specific item type match
-    if (detectedItem.itemTypeBn && (pNameBn.includes(detectedItem.itemTypeBn.toLowerCase()) || pSubBn.includes(detectedItem.itemTypeBn.toLowerCase()))) {
-      score += 35;
-    }
-    if (detectedItem.itemTypeEn && (pNameEn.includes(detectedItem.itemTypeEn.toLowerCase()) || pSubEn.includes(detectedItem.itemTypeEn.toLowerCase()))) {
-      score += 25;
-    }
+  const directVariants = allActiveProducts.filter(p => {
+    if (p.id === primaryProduct.id) return false;
+    const pCode = (p.productCode || '').trim().toLowerCase();
+    const pName = (p.nameBn || '').trim().toLowerCase();
+    const pOrigId = p.originalProductId || p.id;
 
-    // Keyword matches
-    if (Array.isArray(detectedItem.keywords)) {
-      for (const kw of detectedItem.keywords) {
-        const k = String(kw).toLowerCase();
-        if (k.length > 2) {
-          if (pNameBn.includes(k) || pSubBn.includes(k) || pNameEn.includes(k)) {
-            score += 15;
-          } else if (pDescBn.includes(k)) {
-            score += 8;
-          }
-        }
-      }
-    }
+    const isSameCode = Boolean(primaryCode && pCode && primaryCode === pCode);
+    const isSameOrig = Boolean(primaryOrigId && pOrigId && primaryOrigId === pOrigId);
+    const isSameName = Boolean(primaryName && pName && primaryName === pName);
 
-    // Color matches
-    if (Array.isArray(detectedItem.colors)) {
-      for (const c of detectedItem.colors) {
-        const col = String(c).toLowerCase();
-        if (pNameBn.includes(col) || pNameEn.includes(col) || pDescBn.includes(col)) {
-          score += 12;
-        }
-      }
-    }
-
-    // Cap between 65% and 99%
-    const finalScore = Math.min(99, Math.max(62, score));
-    return {
-      product: sanitizeProduct(p),
-      matchScore: finalScore,
-      reason: detectedItem.descriptionBn || `${p.nameBn} এর সাথে চমৎকার মিল পাওয়া গেছে`
-    };
+    return isSameCode || isSameOrig || isSameName;
   });
 
-  // Sort by highest match score
-  scoredProducts.sort((a, b) => b.matchScore - a.matchScore);
-  const matchedProducts = scoredProducts.slice(0, 16);
+  const matchedProducts = [
+    {
+      product: sanitizeProduct(primaryProduct),
+      matchScore: matchScore || 98,
+      reason: matchReason || `${primaryProduct.nameBn} এর ছবির সাথে নিখুঁত মিল পাওয়া গেছে`,
+      isPrimary: true,
+    }
+  ];
 
   res.json({
     success: true,
-    detectedItem,
+    detectedItem: {
+      itemTypeBn: primaryProduct.nameBn,
+      descriptionBn: matchReason || `${primaryProduct.nameBn} এর ছবির সাথে নিখুঁত মিল পাওয়া গেছে`,
+      detectedCategory: primaryProduct.categorySlug,
+      colors: [],
+      keywords: [primaryProduct.nameBn, primaryProduct.productCode].filter(Boolean),
+    },
     matchedProducts,
   });
 });
@@ -5472,7 +5598,7 @@ ${pageTag} #TawZoon #TawZoonNexus #OnlineShoppingBD #TrendingFashion #PremiumQua
 async function startServer() {
   console.log('[Server] Starting Enterprise Engine instantly (local JSON data initialized)...');
 
-  if (isDevContainer && process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,

@@ -476,7 +476,7 @@ export const ResellerPortal: React.FC = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <span className="text-lg font-black tracking-tight text-slate-900 block">
-                    TAWZOON <span className="text-[#009245] font-light">NEXUS</span>
+                    TAWZOON
                   </span>
                   <span className="text-[9px] uppercase font-bold tracking-widest text-[#009245] bg-emerald-50 px-2 py-0.5 rounded-md inline-block">
                     {lang === 'bn' ? 'রিসেলার পোর্টাল' : 'RESELLER PORTAL'}

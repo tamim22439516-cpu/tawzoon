@@ -217,7 +217,7 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-[500] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 transition-colors shadow-xs">
+    <header className="fixed top-0 left-0 right-0 z-[500] glass-header transition-colors">
       
       {/* Top Notification Announcement Bar (Slimmer & Sleeker) */}
       {showPromo && (
@@ -318,25 +318,25 @@ export const Navbar: React.FC = () => {
                 }}
                 className="flex items-center gap-2 text-left group focus:outline-none cursor-pointer shrink-0"
               >
-                {/* Brand Logo - Subtle Rounded Squircle (হালকা রাউন্ড শেপ) */}
+                {/* Brand Logo - Subtle Rounded Squircle (হালকা রাউন্ড শেপ, হালকা বড়) */}
                 <img
                   src={brandSettings?.logoUrl || '/logo.png'}
                   alt={brandName}
-                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-contain bg-white dark:bg-slate-800 shadow-2xs border border-slate-200 dark:border-slate-700 p-0.5 shrink-0"
+                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl object-contain bg-white dark:bg-slate-800 shadow-2xs border border-slate-200 dark:border-slate-700 p-0.5 shrink-0"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = '/logo.png';
                   }}
                 />
 
-                {/* Brand Title: TAW in dark slate, ZOON in vibrant green */}
+                {/* Brand Title - Crisp & Professional without blinking/fading animation */}
                 <div className="flex items-center min-w-0">
                   {brandName.toUpperCase().startsWith('TAWZOON') ? (
-                    <span className="text-sm sm:text-lg font-black tracking-tight uppercase leading-none">
+                    <span className="text-lg sm:text-2xl font-black tracking-tight uppercase leading-none">
                       <span className="text-slate-900 dark:text-white">TAW</span>
                       <span className="text-[#009245]">ZOON</span>
                     </span>
                   ) : (
-                    <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white group-hover:text-[#009245] transition-colors uppercase leading-tight truncate max-w-[90px] sm:max-w-[200px]">
+                    <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white group-hover:text-[#009245] transition-colors uppercase leading-tight truncate max-w-[120px] sm:max-w-[200px]">
                       {brandName}
                     </span>
                   )}
@@ -355,35 +355,47 @@ export const Navbar: React.FC = () => {
               />
             </div>
 
-            {/* 2B. MOBILE ONLY: Touch Pill that expands into full search bar */}
-            <div className="sm:hidden flex-1 min-w-0 max-w-[135px] xs:max-w-[165px] mx-1">
-              <div
+            {/* 2B. MOBILE ONLY: Dedicated Search Icon for Reseller Header; Original Pill for Public Header */}
+            {isEmployeeAuthenticated && activePortal !== 'admin' ? (
+              <button
+                type="button"
                 onClick={() => setIsSearchExpanded(true)}
-                className="w-full flex items-center gap-1.5 bg-[#edf2f6] dark:bg-slate-800 hover:bg-[#e4ebf0] dark:hover:bg-slate-700 rounded-full px-3 py-1.5 transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-xs active:scale-95 group border border-slate-200/40 dark:border-slate-700/50"
+                className="sm:hidden w-8 h-8 rounded-full bg-[#edf2f6] dark:bg-slate-800 hover:bg-[#e4ebf0] dark:hover:bg-slate-700 flex items-center justify-center shrink-0 transition-all duration-200 cursor-pointer shadow-2xs border border-slate-200/60 dark:border-slate-700/60 active:scale-95"
                 title={lang === 'bn' ? 'সার্চ করতে চাপুন' : 'Tap to search'}
+                aria-label={lang === 'bn' ? 'সার্চ' : 'Search'}
               >
-                <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#009245] transition-colors shrink-0" />
-                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
-                  {publicSearch ? publicSearch : (lang === 'bn' ? 'পণ্য খুঁজুন...' : 'Search products...')}
-                </span>
+                <Search className="w-4.5 h-4.5 text-slate-700 dark:text-slate-200 hover:text-[#009245] transition-colors" />
+              </button>
+            ) : (
+              <div className="sm:hidden flex-1 min-w-0 max-w-[135px] xs:max-w-[165px] mx-1">
+                <div
+                  onClick={() => setIsSearchExpanded(true)}
+                  className="w-full flex items-center gap-1.5 bg-[#edf2f6] dark:bg-slate-800 hover:bg-[#e4ebf0] dark:hover:bg-slate-700 rounded-full px-3 py-1.5 transition-all duration-200 cursor-pointer shadow-2xs hover:shadow-xs active:scale-95 group border border-slate-200/40 dark:border-slate-700/50"
+                  title={lang === 'bn' ? 'সার্চ করতে চাপুন' : 'Tap to search'}
+                >
+                  <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#009245] transition-colors shrink-0" />
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
+                    {publicSearch ? publicSearch : (lang === 'bn' ? 'পণ্য খুঁজুন...' : 'Search products...')}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* 2C. DESKTOP HEADER NAVIGATION (PC & Desktop only - Beside Search Bar and Balance) */}
+            {/* 2C. DESKTOP HEADER NAVIGATION (PC & Desktop only - Slightly larger, professional, crisp opacity) */}
             {activePortal !== 'admin' && (
               <nav aria-label="Desktop Navigation" className="hidden md:flex items-center gap-1 lg:gap-1.5 shrink-0">
                 {/* 1. Home (হোম) */}
                 <button
                   type="button"
                   onClick={() => handleNavClick('home')}
-                  className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     isHomeActive
                       ? 'bg-emerald-50 text-[#009245] dark:bg-emerald-950/60 dark:text-emerald-400 shadow-3xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
                   }`}
                   title={lang === 'bn' ? 'হোম পেজ' : 'Home'}
                 >
-                  <Home className="w-4 h-4" />
+                  <Home className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                   <span>{lang === 'bn' ? 'হোম' : 'Home'}</span>
                 </button>
 
@@ -391,21 +403,21 @@ export const Navbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleNavClick('dashboard')}
-                  className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     isDashboardActive
                       ? 'bg-emerald-50 text-[#009245] dark:bg-emerald-950/60 dark:text-emerald-400 shadow-3xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
                   }`}
                   title={isReseller ? (lang === 'bn' ? 'ড্যাশবোর্ড' : 'Dashboard') : (lang === 'bn' ? 'সকল পণ্য' : 'All Products')}
                 >
                   {isReseller ? (
                     <>
-                      <LayoutDashboard className="w-4 h-4" />
+                      <LayoutDashboard className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                       <span>{lang === 'bn' ? 'ড্যাশবোর্ড' : 'Dashboard'}</span>
                     </>
                   ) : (
                     <>
-                      <ShoppingBag className="w-4 h-4" />
+                      <ShoppingBag className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                       <span>{lang === 'bn' ? 'সকল পণ্য' : 'All Products'}</span>
                     </>
                   )}
@@ -415,24 +427,24 @@ export const Navbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleNavClick('orders')}
-                  className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`relative flex items-center gap-1.5 px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     isOrdersActive
                       ? 'bg-emerald-50 text-[#009245] dark:bg-emerald-950/60 dark:text-emerald-400 shadow-3xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
                   }`}
                   title={isReseller ? (lang === 'bn' ? 'অর্ডারসমূহ' : 'Orders') : (lang === 'bn' ? 'পছন্দের তালিকা' : 'Favorites')}
                 >
                   {isReseller ? (
                     <>
-                      <Package className="w-4 h-4" />
+                      <Package className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                       <span>{lang === 'bn' ? 'অর্ডার' : 'Orders'}</span>
                     </>
                   ) : (
                     <>
-                      <Heart className={`w-4 h-4 ${isOrdersActive ? 'fill-[#009245]' : ''}`} />
+                      <Heart className={`w-4 h-4 sm:w-4.5 sm:h-4.5 ${isOrdersActive ? 'fill-[#009245]' : ''}`} />
                       <span>{lang === 'bn' ? 'পছন্দ' : 'Favorites'}</span>
                       {wishlistItems && wishlistItems.length > 0 && (
-                        <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center leading-none">
+                        <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center leading-none animate-badge-pulse">
                           {wishlistItems.length}
                         </span>
                       )}
@@ -444,16 +456,16 @@ export const Navbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleNavClick('cart')}
-                  className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`relative flex items-center gap-1.5 px-2.5 lg:px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                     isCartActive
                       ? 'bg-[#009245] text-white shadow-xs'
                       : 'bg-emerald-50 text-[#009245] hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-400 dark:hover:bg-emerald-900/60'
                   }`}
                   title={lang === 'bn' ? 'শপিং কার্ট' : 'Shopping Cart'}
                 >
-                  <ShoppingCart className="w-4 h-4" />
+                  <ShoppingCart className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                   <span>{lang === 'bn' ? 'কার্ট' : 'Cart'}</span>
-                  <span className={`min-w-4 h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center leading-none ${
+                  <span className={`min-w-4 h-4 px-1 rounded-full text-[10px] font-black flex items-center justify-center leading-none animate-badge-pulse ${
                     isCartActive ? 'bg-amber-400 text-slate-900' : 'bg-[#009245] text-white'
                   }`}>
                     {cartItems.length}
@@ -462,11 +474,9 @@ export const Navbar: React.FC = () => {
               </nav>
             )}
 
-            {/* 3. Right Action Group: Desktop Download Button (PC only) + Balance Pill (Reseller only) + Bell (with count) + Avatar (with green circle border) */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 shrink-0">
+            {/* 3. Right Action Group: Balance Pill + Bell + Avatar (Optimized gap & professional alignment) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               
-
-
               {/* Balance Button - Only visible for authenticated reseller account, hidden in Admin view */}
               {isEmployeeAuthenticated && activePortal !== 'admin' && (
                 <div className="shrink-0 animate-in fade-in duration-200">
@@ -474,7 +484,7 @@ export const Navbar: React.FC = () => {
                 </div>
               )}
           
-              {/* Notification Bell Icon with Dynamic Count & Active Signal */}
+              {/* Notification Bell Icon with Professional Badge Pulse Animation */}
               <div className="relative" ref={notificationRef}>
                 <button
                   type="button"
@@ -485,15 +495,11 @@ export const Navbar: React.FC = () => {
                 >
                   <Bell className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
                   
-                  {/* Dynamic Unread Notification Badge */}
+                  {/* Dynamic Unread Notification Badge with Professional Scale & Multi-digit support */}
                   {unreadCount > 0 && (
-                    <>
-                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[#e31b23] text-white text-[9px] font-black flex items-center justify-center shadow-xs border border-white dark:border-slate-900 leading-none">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                      {/* Subtle live indicator pulse */}
-                      <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-cyan-400 animate-ping opacity-60 pointer-events-none" />
-                    </>
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[#e31b23] text-white text-[9px] font-bold flex items-center justify-center shadow-xs border-[1.5px] border-white dark:border-slate-900 leading-none animate-badge-pulse">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
                   )}
                 </button>
 
