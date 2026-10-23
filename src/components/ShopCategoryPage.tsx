@@ -221,6 +221,97 @@ export const getBilingualSearchTerms = (query: string): string[] => {
   return Array.from(terms);
 };
 
+export const extractProductFromInput = (
+  input: string,
+  products: Product[]
+): { matchedProduct: Product | null; isUrl: boolean; isCode: boolean; isInvalidUrl: boolean; isInvalidCode: boolean } => {
+  if (!input || !input.trim() || !products || products.length === 0) {
+    return { matchedProduct: null, isUrl: false, isCode: false, isInvalidUrl: false, isInvalidCode: false };
+  }
+
+  const raw = input.trim();
+  const rawLower = raw.toLowerCase();
+  const isUrl = rawLower.startsWith('http://') ||
+                rawLower.startsWith('https://') ||
+                rawLower.startsWith('www.') ||
+                rawLower.includes('localhost') ||
+                rawLower.includes('?product=') ||
+                rawLower.includes('&product=') ||
+                rawLower.includes('?code=') ||
+                rawLower.includes('&code=') ||
+                rawLower.includes('?id=') ||
+                rawLower.includes('&id=') ||
+                rawLower.includes('/product/') ||
+                rawLower.includes('/p/');
+
+  if (isUrl) {
+    try {
+      const urlToParse = raw.startsWith('http') ? raw : `https://${raw}`;
+      const urlObj = new URL(urlToParse);
+      const param = urlObj.searchParams.get('product') ||
+                    urlObj.searchParams.get('productCode') ||
+                    urlObj.searchParams.get('code') ||
+                    urlObj.searchParams.get('id');
+
+      if (param) {
+        const cleanParam = decodeURIComponent(param).trim().replace(/^#/, '').toLowerCase();
+        const found = products.find(p =>
+          (p.productCode && p.productCode.trim().replace(/^#/, '').toLowerCase() === cleanParam) ||
+          (p.id && p.id.trim().toLowerCase() === cleanParam)
+        );
+        if (found) {
+          return { matchedProduct: found, isUrl: true, isCode: false, isInvalidUrl: false, isInvalidCode: false };
+        }
+      }
+
+      const segments = urlObj.pathname.split('/').filter(Boolean);
+      for (const seg of segments) {
+        const cleanSeg = decodeURIComponent(seg).trim().replace(/^#/, '').toLowerCase();
+        const found = products.find(p =>
+          (p.productCode && p.productCode.trim().replace(/^#/, '').toLowerCase() === cleanSeg) ||
+          (p.id && p.id.trim().toLowerCase() === cleanSeg)
+        );
+        if (found) {
+          return { matchedProduct: found, isUrl: true, isCode: false, isInvalidUrl: false, isInvalidCode: false };
+        }
+      }
+
+      if (urlObj.hash) {
+        const cleanHash = decodeURIComponent(urlObj.hash).trim().replace(/^#/, '').toLowerCase();
+        const found = products.find(p =>
+          (p.productCode && p.productCode.trim().replace(/^#/, '').toLowerCase() === cleanHash) ||
+          (p.id && p.id.trim().toLowerCase() === cleanHash)
+        );
+        if (found) {
+          return { matchedProduct: found, isUrl: true, isCode: false, isInvalidUrl: false, isInvalidCode: false };
+        }
+      }
+
+      return { matchedProduct: null, isUrl: true, isCode: false, isInvalidUrl: true, isInvalidCode: false };
+    } catch {
+      return { matchedProduct: null, isUrl: true, isCode: false, isInvalidUrl: true, isInvalidCode: false };
+    }
+  }
+
+  const cleanCode = raw.replace(/^#/, '').trim().toLowerCase();
+  const isDirectCodeMatch = products.find(p => {
+    const pCode = (p.productCode || '').trim().replace(/^#/, '').toLowerCase();
+    const pId = (p.id || '').trim().toLowerCase();
+    return pCode === cleanCode || pId === cleanCode || (p.productCode && rawLower === p.productCode.toLowerCase());
+  });
+
+  if (isDirectCodeMatch) {
+    return { matchedProduct: isDirectCodeMatch, isUrl: false, isCode: true, isInvalidUrl: false, isInvalidCode: false };
+  }
+
+  const isCodeCandidate = raw.startsWith('#') || /^sku-|^tnx-/i.test(raw);
+  if (isCodeCandidate) {
+    return { matchedProduct: null, isUrl: false, isCode: true, isInvalidUrl: false, isInvalidCode: true };
+  }
+
+  return { matchedProduct: null, isUrl: false, isCode: false, isInvalidUrl: false, isInvalidCode: false };
+};
+
 const DEFAULT_HERO_SLIDES: HeroSlideItem[] = [
   {
     id: 1,
@@ -306,16 +397,36 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
   products,
   loading,
 }) => {
-  const { lang, setPublicCategory, showPromo, subsections, brandSettings, categories, publicSearch } = useApp();
+  const { lang, setPublicCategory, showPromo, subsections, brandSettings, categories, publicSearch, showToast } = useApp();
 
   const currentSlug = categorySlug.toLowerCase().trim();
 
   // If null -> Category Overview Page
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
 
+  // If viewing a product -> Product Details Page
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+
   // Sync publicSearch from Header search with Public Category page
   useEffect(() => {
     if (publicSearch && publicSearch.trim()) {
+      const res = extractProductFromInput(publicSearch, products || []);
+      if (res.matchedProduct) {
+        setViewingProduct(res.matchedProduct);
+        return;
+      }
+      if (res.isInvalidUrl || res.isInvalidCode) {
+        showToast(
+          lang === 'bn'
+            ? 'ভুল বা অকার্যকর প্রোডাক্ট লিংক বা কোড! কোনো পণ্য পাওয়া যায়নি।'
+            : 'Invalid product link or code! No product found.',
+          'error'
+        );
+        setViewingProduct(null);
+        return;
+      }
+
+      setViewingProduct(null);
       const q = publicSearch.trim();
       const matched = findBestMatchingSubsection(q, subsections || []);
       if (matched) {
@@ -336,8 +447,33 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
       }
     } else {
       setSelectedSubCategory(null);
+      setViewingProduct(null);
     }
-  }, [publicSearch, subsections, products]);
+  }, [publicSearch, subsections, products, lang]);
+
+  // Listen to tawzoon_search_submit event
+  useEffect(() => {
+    const handleSearchSubmit = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const query = customEvent.detail?.query || publicSearch;
+      if (query && query.trim()) {
+        const res = extractProductFromInput(query, products || []);
+        if (res.matchedProduct) {
+          setViewingProduct(res.matchedProduct);
+        } else if (res.isInvalidUrl || res.isInvalidCode) {
+          showToast(
+            lang === 'bn'
+              ? 'ভুল বা অকার্যকর প্রোডাক্ট লিংক বা কোড! কোনো পণ্য পাওয়া যায়নি।'
+              : 'Invalid product link or code! No product found.',
+            'error'
+          );
+          setViewingProduct(null);
+        }
+      }
+    };
+    window.addEventListener('tawzoon_search_submit', handleSearchSubmit as EventListener);
+    return () => window.removeEventListener('tawzoon_search_submit', handleSearchSubmit as EventListener);
+  }, [products, lang, publicSearch]);
 
   const isAllOrShopTab = currentSlug === 'shop_tab' || currentSlug === 'all';
   const isGadget = currentSlug === 'gadgets' || currentSlug === 'gajet' || currentSlug.includes('gadget') || currentSlug.includes('tech');
@@ -404,8 +540,7 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState<boolean>(false);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState<boolean>(false);
 
-  // If viewing a product -> Product Details Page
-  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+
 
   // Dynamic calculation of products matching subcategory / keyword
   const getSubCatCount = (subcatBn: string, subcatEn: string, catSlug?: string) => {
@@ -603,19 +738,13 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
         );
       });
     } else if (publicSearch && publicSearch.trim()) {
-      const rawQ = publicSearch.toLowerCase().trim();
-      const cleanQ = rawQ.replace(/^#/, '');
-      const terms = getBilingualSearchTerms(publicSearch);
-
-      const exactCodeProd = list.find(p => {
-        const code = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
-        const pId = (p.id || '').toLowerCase().trim();
-        return code === cleanQ || code === rawQ || pId === cleanQ || pId === rawQ;
-      });
-
-      if (exactCodeProd) {
-        list = [exactCodeProd];
+      const res = extractProductFromInput(publicSearch, list);
+      if (res.matchedProduct) {
+        list = [res.matchedProduct];
+      } else if (res.isInvalidUrl || res.isInvalidCode) {
+        list = [];
       } else {
+        const terms = getBilingualSearchTerms(publicSearch);
         list = list.filter(p => {
           const pCode = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
           const pId = (p.id || '').toLowerCase().trim();

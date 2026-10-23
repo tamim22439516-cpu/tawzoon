@@ -220,6 +220,9 @@ export const Navbar: React.FC = () => {
     if (activePortal === 'employee') {
       setResellerTab('catalog');
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('tawzoon_search_submit', { detail: { query: publicSearch } }));
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

@@ -265,6 +265,77 @@ ${desc ? `\n📝 বিবরণ:\n${desc}\n` : ''}
               </div>
             )}
 
+            {/* Visual Verification Comparison Box */}
+            {visualSearchImage && visualSearchResults.length > 0 && !isVisualSearching && (
+              <div className="bg-gradient-to-r from-emerald-50/90 via-white to-emerald-50/90 dark:bg-slate-800 border-2 border-emerald-300 dark:border-emerald-800 rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-[#009245]" />
+                    <h5 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                      {lang === 'bn' ? '🔍 নিশ্চিত করুন: আপনার আপলোড করা ছবি ও ক্যাটাগরি মিল' : '🔍 Verification: Searched Photo & Match'}
+                    </h5>
+                  </div>
+                  <span className="text-[10px] font-bold bg-[#009245] text-white px-2 py-0.5 rounded-full shadow-3xs">
+                    {lang === 'bn' ? 'সঠিক মিল নিশ্চিত ✓' : 'Verified Match ✓'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-center gap-3 sm:gap-6 py-2">
+                  {/* User Uploaded Search Image */}
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-white border-2 border-[#009245] shadow-md p-1">
+                      <img
+                        src={visualSearchImage}
+                        alt="User Searched"
+                        className="w-full h-full object-cover rounded-xl"
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 mt-1">
+                      {lang === 'bn' ? 'আপনার সার্চ করা ছবি' : 'Your Search Photo'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col items-center text-[#009245] animate-pulse">
+                    <ArrowRight className="w-6 h-6 sm:w-8 sm:h-8" />
+                    <span className="text-[9px] font-bold">
+                      {visualSearchResults[0]?.matchScore || 90}% {lang === 'bn' ? 'মিল' : 'Match'}
+                    </span>
+                  </div>
+
+                  {/* Top Matched Product Image */}
+                  {visualSearchResults[0] && (() => {
+                    const topProd = visualSearchResults[0].product;
+                    const topImg = topProd.images?.find((img) => img.isPrimary)?.url || topProd.images?.[0]?.url || topProd.imageUrl || '/images/product_shop_dress_1790244714775.jpg';
+                    return (
+                      <div
+                        onClick={() => {
+                          if (isReseller) {
+                            setPreviewProduct(topProd);
+                          } else {
+                            closeVisualSearch();
+                            setSelectedProduct(topProd);
+                          }
+                        }}
+                        className="flex flex-col items-center cursor-pointer group"
+                        title={lang === 'bn' ? 'পণ্যটি দেখতে ক্লিক করুন' : 'Click to view product'}
+                      >
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-white border-2 border-emerald-500 shadow-md p-1 group-hover:scale-105 transition-transform">
+                          <img
+                            src={topImg}
+                            alt={topProd.nameBn}
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                        </div>
+                        <span className="text-[10px] font-bold text-[#009245] group-hover:underline mt-1 truncate max-w-[100px]">
+                          {topProd.productCode || topProd.nameBn}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {/* 3. Matching Products Results Grid */}
             <div className="space-y-3">
               <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">

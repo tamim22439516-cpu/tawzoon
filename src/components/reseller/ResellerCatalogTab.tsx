@@ -28,7 +28,7 @@ import { useApp } from '../../context/AppContext.js';
 import { Product } from '../../types/index.js';
 import { HeroSection } from '../HeroSection.js';
 import { ResellerProductPreviewModal } from './ResellerProductPreviewModal.js';
-import { isCategoryMatch, getBilingualSearchTerms, normalizeBengali, toCompactKey, findBestMatchingSubsection } from '../ShopCategoryPage.js';
+import { isCategoryMatch, getBilingualSearchTerms, normalizeBengali, toCompactKey, findBestMatchingSubsection, extractProductFromInput } from '../ShopCategoryPage.js';
 import { getAdjustedSellingPrice, getAdjustedRegularPrice, getResellerProfitPerUnit, getResellerWholesalePrice } from '../../utils/pricing.js';
 
 interface ResellerCatalogTabProps {
@@ -69,6 +69,23 @@ export const ResellerCatalogTab: React.FC<ResellerCatalogTabProps> = ({
       setSearchQuery(q);
       setCurrentView('reseller-catalog');
 
+      const res = extractProductFromInput(q, productsList || []);
+      if (res.matchedProduct) {
+        setPreviewProduct(res.matchedProduct);
+        return;
+      }
+      if (res.isInvalidUrl || res.isInvalidCode) {
+        showToast(
+          lang === 'bn'
+            ? 'ভুল বা অকার্যকর প্রোডাক্ট লিংক বা কোড! কোনো পণ্য পাওয়া যায়নি।'
+            : 'Invalid product link or code! No product found.',
+          'error'
+        );
+        setPreviewProduct(null);
+        return;
+      }
+
+      setPreviewProduct(null);
       const matched = findBestMatchingSubsection(q, subsections || []);
       if (matched) {
         setSelectedSubCategory(matched.name);
@@ -89,8 +106,34 @@ export const ResellerCatalogTab: React.FC<ResellerCatalogTabProps> = ({
     } else if (publicSearch === '') {
       setSearchQuery('');
       setSelectedSubCategory(null);
+      setPreviewProduct(null);
     }
-  }, [publicSearch, subsections, productsList]);
+  }, [publicSearch, subsections, productsList, lang]);
+
+  // Listen to tawzoon_search_submit for Reseller
+  useEffect(() => {
+    const handleSearchSubmit = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const query = customEvent.detail?.query || publicSearch;
+      if (query && query.trim()) {
+        const res = extractProductFromInput(query, productsList || []);
+        if (res.matchedProduct) {
+          setPreviewProduct(res.matchedProduct);
+          setCurrentView('reseller-catalog');
+        } else if (res.isInvalidUrl || res.isInvalidCode) {
+          showToast(
+            lang === 'bn'
+              ? 'ভুল বা অকার্যকর প্রোডাক্ট লিংক বা কোড! কোনো পণ্য পাওয়া যায়নি।'
+              : 'Invalid product link or code! No product found.',
+            'error'
+          );
+          setPreviewProduct(null);
+        }
+      }
+    };
+    window.addEventListener('tawzoon_search_submit', handleSearchSubmit as EventListener);
+    return () => window.removeEventListener('tawzoon_search_submit', handleSearchSubmit as EventListener);
+  }, [productsList, lang, publicSearch]);
 
   // Reset to Public Home view whenever bottom nav 'হোম' is clicked
   useEffect(() => {
@@ -335,81 +378,46 @@ export const ResellerCatalogTab: React.FC<ResellerCatalogTabProps> = ({
     }
 
     if (searchQuery.trim()) {
-      const rawQ = searchQuery.toLowerCase().trim();
-      const cleanQ = rawQ
-        .replace(/^#/, '')
-        .replace(/\u09DF/g, '\u09AF')
-        .replace(/\u09DC/g, '\u09A1')
-        .replace(/\u09DD/g, '\u09A2');
+      const res = extractProductFromInput(searchQuery, list);
+      if (res.matchedProduct) {
+        list = [res.matchedProduct];
+      } else if (res.isInvalidUrl || res.isInvalidCode) {
+        list = [];
+      } else {
+        const termsArray = getBilingualSearchTerms(searchQuery);
 
-      let exactLinkProd: Product | undefined;
-      const isUrl = rawQ.includes('http://') || rawQ.includes('https://') || rawQ.includes('www.') || rawQ.includes('localhost') || rawQ.includes('/product/') || rawQ.includes('/p/') || rawQ.includes('product=') || rawQ.includes('code=');
+        const isClothingSearch = ['shop', 'clothing', 'fashion', 'style', 'পোশাক', 'ফ্যাশন', 'শপ', 'ছেলেদের পোশাক', 'মেয়েদের পোশাক', 'কাপড়'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
+        const isGadgetSearch = ['gadget', 'gadgets', 'tech', 'electronics', 'গ্যাজেট', 'ইলেকট্রনিক্স', 'টেকনোলজি', 'স্মার্ট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
+        const isOtherSearch = ['other', 'others', 'lifestyle', 'অন্যান্য', 'লাইফস্টাইল', 'বই', 'গিফট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
 
-      if (isUrl) {
-        try {
-          const urlObj = new URL(rawQ.startsWith('http') ? rawQ : `https://${rawQ}`);
-          const paramId = urlObj.searchParams.get('product') || urlObj.searchParams.get('id') || urlObj.searchParams.get('code') || urlObj.searchParams.get('productCode');
-          if (paramId) {
-            const pMatch = list.find(p => p.id === paramId || (p.productCode && p.productCode.toLowerCase().trim().replace(/^#/, '') === paramId.toLowerCase().trim().replace(/^#/, '')));
-            if (pMatch) exactLinkProd = pMatch;
-          }
-          if (!exactLinkProd) {
-            const segments = urlObj.pathname.split('/').filter(Boolean);
-            for (const seg of segments) {
-              const cleanSeg = seg.toLowerCase().trim().replace(/^#/, '');
-              const pMatch = list.find(p => p.id === seg || (p.productCode && p.productCode.toLowerCase().trim().replace(/^#/, '') === cleanSeg));
-              if (pMatch) { exactLinkProd = pMatch; break; }
-            }
-          }
-        } catch {}
-        if (!exactLinkProd) {
-          exactLinkProd = list.find(p => (p.productCode && p.productCode.length >= 2 && rawQ.includes(p.productCode.toLowerCase().trim().replace(/^#/, ''))) || (p.id && p.id.length >= 3 && rawQ.includes(p.id.toLowerCase())));
-        }
-      }
+        list = list.filter(p => {
+          const pCode = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
+          const pId = (p.id || '').toLowerCase().trim();
+          const pNameBn = normalizeBengali(p.nameBn);
+          const pNameEn = (p.nameEn || '').toLowerCase();
+          const pSubBn = normalizeBengali(p.subcategoryBn);
+          const pSubEn = (p.subcategoryEn || '').toLowerCase();
+          const pCatSlug = (p.categorySlug || '').toLowerCase();
+          const pDescBn = normalizeBengali(p.shortDescBn || p.fullDescBn || '');
 
-      const exactCodeProd = exactLinkProd || list.find(p => {
-        const code = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
-        const pId = (p.id || '').toLowerCase().trim();
-        return code === cleanQ || code === rawQ || pId === cleanQ || pId === rawQ;
-      });
+          const matchesCategory =
+            (isClothingSearch && ['shop', 'style', 'fashion', 'lifestyle'].includes(pCatSlug)) ||
+            (isGadgetSearch && ['gajet', 'gadget', 'gadgets', 'tech'].includes(pCatSlug)) ||
+            (isOtherSearch && ['other', 'others'].includes(pCatSlug));
 
-      const termsArray = getBilingualSearchTerms(searchQuery);
-
-      const isClothingSearch = ['shop', 'clothing', 'fashion', 'style', 'পোশাক', 'ফ্যাশন', 'শপ', 'ছেলেদের পোশাক', 'মেয়েদের পোশাক', 'কাপড়'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
-      const isGadgetSearch = ['gadget', 'gadgets', 'tech', 'electronics', 'গ্যাজেট', 'ইলেকট্রনিক্স', 'টেকনোলজি', 'স্মার্ট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
-      const isOtherSearch = ['other', 'others', 'lifestyle', 'অন্যান্য', 'লাইফস্টাইল', 'বই', 'গিফট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
-
-      list = list.filter(p => {
-        const pCode = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
-        const pId = (p.id || '').toLowerCase().trim();
-        const pNameBn = normalizeBengali(p.nameBn);
-        const pNameEn = (p.nameEn || '').toLowerCase();
-        const pSubBn = normalizeBengali(p.subcategoryBn);
-        const pSubEn = (p.subcategoryEn || '').toLowerCase();
-        const pCatSlug = (p.categorySlug || '').toLowerCase();
-        const pDescBn = normalizeBengali(p.shortDescBn || p.fullDescBn || '');
-
-        const matchesCategory =
-          (isClothingSearch && ['shop', 'style', 'fashion', 'lifestyle'].includes(pCatSlug)) ||
-          (isGadgetSearch && ['gajet', 'gadget', 'gadgets', 'tech'].includes(pCatSlug)) ||
-          (isOtherSearch && ['other', 'others'].includes(pCatSlug));
-
-        return (
-          termsArray.some(t =>
-            pCode.includes(t) ||
-            pId === t ||
-            pNameBn.includes(t) ||
-            pNameEn.includes(t) ||
-            pSubBn.includes(t) ||
-            pSubEn.includes(t) ||
-            pCatSlug.includes(t) ||
-            pDescBn.includes(t)
-          ) || matchesCategory
-        );
-      });
-
-      if (exactCodeProd) {
-        list = [exactCodeProd];
+          return (
+            termsArray.some(t =>
+              pCode.includes(t) ||
+              pId === t ||
+              pNameBn.includes(t) ||
+              pNameEn.includes(t) ||
+              pSubBn.includes(t) ||
+              pSubEn.includes(t) ||
+              pCatSlug.includes(t) ||
+              pDescBn.includes(t)
+            ) || matchesCategory
+          );
+        });
       }
     }
 
