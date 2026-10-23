@@ -216,6 +216,16 @@ export const Navbar: React.FC = () => {
     }
   };
 
+  const handleHeaderSearchSubmit = () => {
+    if (activePortal === 'employee') {
+      setResellerTab('catalog');
+    }
+    const el = document.getElementById('catalog-section') || document.getElementById('products-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 z-[500] glass-header transition-colors">
       
@@ -281,6 +291,7 @@ export const Navbar: React.FC = () => {
               <SearchInputWithImage
                 value={publicSearch}
                 onChange={setPublicSearch}
+                onSearchSubmit={handleHeaderSearchSubmit}
                 placeholder={lang === 'bn' ? 'পণ্য খুঁজুন...' : 'Search products...'}
                 size="md"
                 autoFocus
@@ -349,6 +360,7 @@ export const Navbar: React.FC = () => {
               <SearchInputWithImage
                 value={publicSearch}
                 onChange={setPublicSearch}
+                onSearchSubmit={handleHeaderSearchSubmit}
                 placeholder={lang === 'bn' ? 'পণ্য খুঁজুন...' : 'Search products...'}
                 size="sm"
                 className="shadow-2xs hover:shadow-xs"

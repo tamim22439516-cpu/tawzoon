@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext.js';
 interface SearchInputWithImageProps {
   value: string;
   onChange: (value: string) => void;
+  onSearchSubmit?: () => void;
   placeholder?: string;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
@@ -15,6 +16,7 @@ interface SearchInputWithImageProps {
 export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
   value,
   onChange,
+  onSearchSubmit,
   placeholder,
   className = '',
   size = 'md',
@@ -60,6 +62,17 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
     setIsDragOver(false);
   };
 
+  const triggerSearchAction = () => {
+    if (onSearchSubmit) {
+      onSearchSubmit();
+    } else {
+      const el = document.getElementById('catalog-section') || document.getElementById('products-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
   const pyClass = size === 'sm' ? 'py-1.5' : size === 'lg' ? 'py-3' : 'py-2 sm:py-2.5';
   const textClass = size === 'sm' ? 'text-xs font-medium' : size === 'lg' ? 'text-base font-bold' : 'text-sm sm:text-base font-bold';
   const iconSize = size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4 sm:w-5 sm:h-5';
@@ -84,8 +97,16 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
         onChange={handleFileChange}
       />
 
-      {/* Left Search Icon */}
-      <Search className={`absolute left-3.5 ${iconSize} text-slate-400 pointer-events-none shrink-0`} />
+      {/* Left Search Icon - Clickable Trigger */}
+      <button
+        type="button"
+        onClick={triggerSearchAction}
+        className="absolute left-3.5 text-slate-400 hover:text-[#009245] transition-colors shrink-0 cursor-pointer focus:outline-none"
+        title={lang === 'bn' ? 'অনুসন্ধান করুন' : 'Search'}
+        aria-label="Search"
+      >
+        <Search className={`${iconSize}`} />
+      </button>
 
       {/* Main Text Input */}
       <input
@@ -93,7 +114,14 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerSearchAction();
+            if (window.innerWidth < 640 && onClose) {
+              (e.target as HTMLInputElement).blur();
+            }
+          } else if (e.key === 'Escape') {
             onClose?.();
           }
         }}
@@ -148,3 +176,4 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
     </div>
   );
 };
+

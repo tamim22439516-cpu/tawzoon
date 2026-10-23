@@ -359,16 +359,46 @@ app.get('/api/public/products', (req: Request, res: Response) => {
   }
 
   if (search) {
-    const q = (search as string).toLowerCase().trim();
-    results = results.filter(p =>
-      p.nameBn.toLowerCase().includes(q) ||
-      p.nameEn.toLowerCase().includes(q) ||
-      p.productCode.toLowerCase().includes(q) ||
-      p.subcategoryBn.toLowerCase().includes(q) ||
-      p.subcategoryEn.toLowerCase().includes(q) ||
-      p.shortDescBn.toLowerCase().includes(q) ||
-      p.shortDescEn.toLowerCase().includes(q)
-    );
+    const rawQ = (search as string).toLowerCase().trim();
+    const cleanQ = rawQ
+      .replace(/^#/, '')
+      .replace(/\u09DF/g, '\u09AF')
+      .replace(/\u09DC/g, '\u09A1')
+      .replace(/\u09DD/g, '\u09A2');
+
+    // Find exact product code match
+    const exactCodeProduct = results.find(p => {
+      const code = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
+      return code === cleanQ || code === rawQ;
+    });
+
+    results = results.filter(p => {
+      const pCode = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
+      const pNameBn = (p.nameBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
+      const pNameEn = (p.nameEn || '').toLowerCase();
+      const pSubBn = (p.subcategoryBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
+      const pSubEn = (p.subcategoryEn || '').toLowerCase();
+      const pShortDescBn = (p.shortDescBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
+      const pShortDescEn = (p.shortDescEn || '').toLowerCase();
+      const pFullDescBn = (p.fullDescBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
+
+      return (
+        pCode.includes(cleanQ) ||
+        pCode.includes(rawQ) ||
+        pNameBn.includes(cleanQ) ||
+        pNameEn.includes(cleanQ) ||
+        pSubBn.includes(cleanQ) ||
+        pSubEn.includes(cleanQ) ||
+        pShortDescBn.includes(cleanQ) ||
+        pShortDescEn.includes(cleanQ) ||
+        pFullDescBn.includes(cleanQ)
+      );
+    });
+
+    // If an exact product code match exists, put it at index 0
+    if (exactCodeProduct) {
+      results.sort((a, b) => (a.id === exactCodeProduct.id ? -1 : b.id === exactCodeProduct.id ? 1 : 0));
+    }
   }
 
   if (filter === 'featured') {
