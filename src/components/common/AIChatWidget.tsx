@@ -565,55 +565,232 @@ export const AIChatWidget: React.FC = () => {
     }
   };
 
-  // Robot SVG Avatar with floating animation and glowing blue indicator
-  const RenderCuteRobotLogo = ({ size = 'w-12 h-12' }: { size?: string }) => {
+  // High-Fidelity Animated Vector SVG Robot Logo Component
+  const RenderCuteRobotLogo = ({ size = 'w-16 h-16', isCompact = false }: { size?: string; isCompact?: boolean }) => {
     return (
-      <div className={`relative ${size} transition-all duration-300 transform select-none`}>
-        {/* Animated Blue Pulse Rings */}
-        <div className="absolute inset-0 rounded-full bg-cyan-400/35 animate-ping opacity-75 scale-125" />
-        <div className="absolute -inset-1.5 rounded-full bg-blue-500/15 animate-pulse blur-xs" />
+      <div className={`relative ${size} transition-all duration-300 transform select-none group cursor-pointer`}>
+        {/* Active Ambient Green/Cyan Aura Glow */}
+        <div className="absolute -inset-1.5 rounded-full bg-gradient-to-r from-[#00ff66]/30 via-[#00e5ff]/30 to-[#009245]/30 blur-md animate-[robotAura_3.5s_ease-in-out_infinite] pointer-events-none" />
 
-        {/* Floating Robot Body Element */}
-        <div className="w-full h-full relative flex items-center justify-center animate-[float_3s_ease-in-out_infinite]">
-          {/* Main Round White Head */}
-          <div className="w-10 h-10 rounded-full bg-white relative flex items-center justify-center border border-slate-100 shadow-[inset_-2px_-2px_6px_rgba(0,0,0,0.12),0_4px_8px_rgba(0,0,0,0.15)] z-10">
-            {/* Visor / Dark Screen Face */}
-            <div className="w-7.5 h-6 rounded-2xl bg-slate-900 flex flex-col items-center justify-center p-0.5 relative overflow-hidden">
-              {/* Dual Glowing Cyan Eyes */}
-              <div className="flex justify-between w-5 px-0.5 mb-0.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-[pulse_1.5s_infinite] shadow-[0_0_6px_#22d3ee]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-[pulse_1.5s_infinite] shadow-[0_0_6px_#22d3ee]" />
-              </div>
-              {/* Cyan Smiling Mouth */}
-              <div className="w-3 h-1 border-b-2 border-cyan-400 rounded-full" />
-            </div>
+        {/* Main Floating Robot Vector Container */}
+        <div className="w-full h-full relative flex items-center justify-center animate-[robotFloat_3.5s_ease-in-out_infinite]">
+          
+          <svg
+            viewBox="0 0 200 210"
+            className="w-full h-full filter drop-shadow-[0_6px_16px_rgba(0,146,69,0.3)] overflow-visible"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              {/* High Contrast Dark Chrome Metallic Gradients */}
+              <linearGradient id="robotBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#1e293b" />
+                <stop offset="50%" stopColor="#0f172a" />
+                <stop offset="100%" stopColor="#020617" />
+              </linearGradient>
 
-            {/* Left and Right Light Blue Headphones */}
-            <div className="absolute -left-1.5 w-2.5 h-5 rounded-l-lg bg-blue-400/90 shadow-sm border-r border-white/25" />
-            <div className="absolute -right-1.5 w-2.5 h-5 rounded-r-lg bg-blue-400/90 shadow-sm border-l border-white/25" />
-          </div>
+              <linearGradient id="robotHeadGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+                <stop offset="0%" stopColor="#334155" />
+                <stop offset="40%" stopColor="#1e293b" />
+                <stop offset="100%" stopColor="#0f172a" />
+              </linearGradient>
 
-          {/* Floating Lower Torso Body */}
-          <div className="absolute bottom-0 w-6 h-3 bg-slate-100 border border-slate-200/50 rounded-b-xl shadow-xs" />
+              <linearGradient id="visorBgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#022c22" />
+                <stop offset="60%" stopColor="#04090b" />
+                <stop offset="100%" stopColor="#000000" />
+              </linearGradient>
 
-          {/* Floating Arm elements */}
-          <div className="absolute -left-2 top-4 w-1.5 h-4 bg-slate-50 border border-slate-200/50 rounded-full animate-[floatArmLeft_2.5s_ease-in-out_infinite]" />
-          <div className="absolute -right-2 top-4 w-1.5 h-4 bg-slate-50 border border-slate-200/50 rounded-full animate-[floatArmRight_2.5s_ease-in-out_infinite]" />
+              <linearGradient id="blueAccentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00e5ff" />
+                <stop offset="50%" stopColor="#0088ff" />
+                <stop offset="100%" stopColor="#0044cc" />
+              </linearGradient>
+
+              <linearGradient id="greenAccentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00ff66" />
+                <stop offset="100%" stopColor="#00cc44" />
+              </linearGradient>
+
+              <linearGradient id="antennaRodGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#00ff66" />
+                <stop offset="50%" stopColor="#0284c7" />
+                <stop offset="100%" stopColor="#0f172a" />
+              </linearGradient>
+
+              <linearGradient id="speechBubbleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#0284c7" />
+                <stop offset="100%" stopColor="#0369a1" />
+              </linearGradient>
+
+              {/* High Intensity Glow Filters */}
+              <filter id="cyanGlow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+
+              <filter id="greenGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="4.5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            {/* ==================== 1. SYMMETRICAL DUAL ANTENNAS (NEON GREEN SIGNAL HORNS) ==================== */}
+            {/* Left Antenna Horn */}
+            <g className="antenna-group-left">
+              {/* Radiating Radar Active Signal Wave Rings (Left) */}
+              <circle cx="48" cy="18" r="14" fill="none" stroke="#00ff66" strokeWidth="2" className="animate-[signalWave_2.4s_ease-out_infinite_0.4s]" opacity="0.95" filter="url(#greenGlow)" />
+              <circle cx="48" cy="18" r="22" fill="none" stroke="#00ff66" strokeWidth="1.5" className="animate-[signalWave_2.4s_ease-out_infinite_1.2s]" opacity="0.85" filter="url(#greenGlow)" />
+              <circle cx="48" cy="18" r="30" fill="none" stroke="#00e5ff" strokeWidth="1.2" className="animate-[signalWave_2.4s_ease-out_infinite_2.0s]" opacity="0.6" />
+
+              {/* Extended Tall Antenna Stem (Left) */}
+              <path d="M 68 58 L 52 24" stroke="url(#antennaRodGrad)" strokeWidth="6" strokeLinecap="round" />
+              <path d="M 68 58 L 52 24" stroke="#00ff66" strokeWidth="1.8" strokeLinecap="round" opacity="0.95" filter="url(#greenGlow)" />
+
+              {/* Antenna Joints / Ridges (Left) */}
+              <rect x="59" y="48" width="6" height="3" rx="1.5" fill="#00ff66" transform="rotate(65 62 49.5)" />
+              <rect x="53" y="32" width="5" height="3" rx="1.5" fill="#00ff66" transform="rotate(65 55.5 33.5)" />
+
+              {/* Antenna Tip Glowing Orb (Left) */}
+              <circle cx="48" cy="18" r="8.5" fill="url(#greenAccentGrad)" filter="url(#greenGlow)" />
+              <circle cx="48" cy="18" r="4" fill="#ffffff" className="animate-[pulse_1.2s_ease-in-out_infinite_0.3s]" />
+            </g>
+
+            {/* Right Antenna Horn */}
+            <g className="antenna-group-right">
+              {/* Radiating Radar Active Signal Wave Rings (Right) */}
+              <circle cx="152" cy="18" r="14" fill="none" stroke="#00ff66" strokeWidth="2" className="animate-[signalWave_2.4s_ease-out_infinite_0s]" opacity="0.95" filter="url(#greenGlow)" />
+              <circle cx="152" cy="18" r="22" fill="none" stroke="#00ff66" strokeWidth="1.5" className="animate-[signalWave_2.4s_ease-out_infinite_0.8s]" opacity="0.85" filter="url(#greenGlow)" />
+              <circle cx="152" cy="18" r="30" fill="none" stroke="#00e5ff" strokeWidth="1.2" className="animate-[signalWave_2.4s_ease-out_infinite_1.6s]" opacity="0.6" />
+
+              {/* Extended Tall Antenna Stem (Right) */}
+              <path d="M 132 58 L 148 24" stroke="url(#antennaRodGrad)" strokeWidth="6" strokeLinecap="round" />
+              <path d="M 132 58 L 148 24" stroke="#00ff66" strokeWidth="1.8" strokeLinecap="round" opacity="0.95" filter="url(#greenGlow)" />
+
+              {/* Antenna Joints / Ridges (Right) */}
+              <rect x="135" y="48" width="6" height="3" rx="1.5" fill="#00ff66" transform="rotate(-65 138 49.5)" />
+              <rect x="142" y="32" width="5" height="3" rx="1.5" fill="#00ff66" transform="rotate(-65 144.5 33.5)" />
+
+              {/* Antenna Tip Glowing Orb (Right) */}
+              <circle cx="152" cy="18" r="8.5" fill="url(#greenAccentGrad)" filter="url(#greenGlow)" />
+              <circle cx="152" cy="18" r="4" fill="#ffffff" className="animate-[pulse_1.2s_ease-in-out_infinite]" />
+            </g>
+
+            {/* ==================== 2. STREAMLINED ARMLESS CAPSULE BODY ==================== */}
+            {/* Smooth Rounded Lower Body Pod */}
+            <rect
+              x="46"
+              y="136"
+              width="108"
+              height="58"
+              rx="28"
+              fill="url(#robotBodyGrad)"
+              stroke="#00e5ff"
+              strokeWidth="2.5"
+              filter="drop-shadow(0 6px 12px rgba(0,0,0,0.4))"
+            />
+            {/* Neon Green Metallic Bottom Rim Ring */}
+            <path d="M 54 180 C 72 192, 128 192, 146 180" stroke="url(#greenAccentGrad)" strokeWidth="4" strokeLinecap="round" filter="url(#greenGlow)" />
+
+            {/* ==================== 3. CHEST SHOPPING BAG WITH BOLD "TZ" LOGO ==================== */}
+            <g className="chest-badge-group">
+              {/* Bag Handle */}
+              <path d="M 80 146 C 80 136, 110 136, 110 146" fill="none" stroke="#00e5ff" strokeWidth="2.5" strokeLinecap="round" />
+              {/* Crisp White Shopping Bag Badge for Maximum Pop */}
+              <rect x="68" y="145" width="54" height="42" rx="8" fill="#ffffff" stroke="#00ff66" strokeWidth="2" filter="drop-shadow(0 4px 10px rgba(0,255,102,0.35))" />
+              {/* Blue Side Trim on Bag */}
+              <path d="M 115 145 L 122 145 C 122 145 120 180 118 187 L 115 187 Z" fill="url(#blueAccentGrad)" opacity="0.9" />
+
+              {/* Ultra-Sharp "TZ" Brand Emblem */}
+              {/* Bold Black 'T' */}
+              <path d="M 74 153 L 91 153 L 91 157 L 85 157 L 85 178 L 80 178 L 80 157 L 74 157 Z" fill="#020617" />
+              {/* Vibrant High-Clarity Emerald Green 'Z' with Dark Outline */}
+              <path
+                d="M 88 161 L 110 161 L 94 174 L 110 174 L 110 180 L 87 180 L 103 167 L 88 167 Z"
+                fill="#00e65c"
+                stroke="#0f172a"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+                filter="url(#greenGlow)"
+              />
+            </g>
+
+            {/* ==================== 4. PROFESSIONAL SUPPORT DESK HEADPHONES & HEADSET MIC ==================== */}
+            {/* Head Base Outer Shell */}
+            <rect x="42" y="46" width="106" height="88" rx="44" fill="url(#robotHeadGrad)" stroke="#00e5ff" strokeWidth="2.5" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.5))" />
+
+            {/* Top Head Metallic Chrome Rim Arc */}
+            <path d="M 52 58 C 70 46, 120 46, 138 58" stroke="url(#greenAccentGrad)" strokeWidth="3.5" fill="none" strokeLinecap="round" filter="url(#greenGlow)" />
+
+            {/* Left Over-Ear Headphone with Glowing Blue/Cyan LED Ring */}
+            <g className="headphone-left">
+              <rect x="30" y="66" width="15" height="42" rx="7.5" fill="url(#blueAccentGrad)" stroke="#00e5ff" strokeWidth="2" filter="url(#cyanGlow)" />
+              <rect x="33" y="71" width="9" height="32" rx="4.5" fill="#0f172a" />
+              <rect x="35" y="76" width="5" height="22" rx="2.5" fill="#00e5ff" opacity="0.8" className="animate-[pulse_2s_ease-in-out_infinite]" />
+            </g>
+
+            {/* Right Over-Ear Headphone with Glowing Blue/Cyan LED Ring */}
+            <g className="headphone-right">
+              <rect x="145" y="66" width="15" height="42" rx="7.5" fill="url(#blueAccentGrad)" stroke="#00e5ff" strokeWidth="2" filter="url(#cyanGlow)" />
+              <rect x="148" y="71" width="9" height="32" rx="4.5" fill="#0f172a" />
+              <rect x="150" y="76" width="5" height="22" rx="2.5" fill="#00e5ff" opacity="0.8" className="animate-[pulse_2s_ease-in-out_infinite_0.5s]" />
+            </g>
+
+            {/* Support Helpdesk Headset Microphone Boom Arm */}
+            <g className="headset-microphone">
+              <path d="M 148 94 Q 138 114 122 110" fill="none" stroke="url(#blueAccentGrad)" strokeWidth="3.5" strokeLinecap="round" filter="url(#cyanGlow)" />
+              <ellipse cx="120" cy="110" rx="5" ry="4" fill="#0f172a" stroke="#00e5ff" strokeWidth="1.5" />
+              <circle cx="120" cy="110" r="2" fill="#00ff66" filter="url(#greenGlow)" className="animate-[pulse_1.2s_ease-in-out_infinite]" />
+            </g>
+
+            {/* ==================== 5. GLOSSARY VISOR & CRISP WHITE SMILING EYES ==================== */}
+            {/* Dark Visor Mask */}
+            <rect x="52" y="58" width="86" height="58" rx="28" fill="url(#visorBgGrad)" stroke="#00ff66" strokeWidth="2.5" filter="drop-shadow(0 0 8px rgba(0,255,102,0.4))" />
+
+            {/* Visor Inner Neon Green Border Glow Arc */}
+            <rect x="54" y="60" width="82" height="54" rx="26" fill="none" stroke="#00ff66" strokeWidth="1.2" opacity="0.8" filter="url(#greenGlow)" />
+
+            {/* Smooth Blinking Visor Eye Group - CRISP BRIGHT WHITE */}
+            <g className="visor-eyes animate-[eyeBlink_4.5s_ease-in-out_infinite]">
+              {/* Left Smiling Arc Eye (CRISP WHITE) */}
+              <path d="M 68 84 C 72 72, 82 72, 86 84" fill="none" stroke="#ffffff" strokeWidth="5.5" strokeLinecap="round" filter="drop-shadow(0 0 6px #00ff66)" />
+              {/* Right Smiling Arc Eye (CRISP WHITE) */}
+              <path d="M 104 84 C 108 72, 118 72, 122 84" fill="none" stroke="#ffffff" strokeWidth="5.5" strokeLinecap="round" filter="drop-shadow(0 0 6px #00ff66)" />
+              {/* Cute Smiling Mouth Curve (CRISP WHITE) */}
+              <path d="M 91 96 C 93 100, 97 100, 99 96" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" opacity="0.95" filter="drop-shadow(0 0 4px #00ff66)" />
+            </g>
+
+            {/* Glossy Visor Reflection Highlight */}
+            <path d="M 58 66 C 70 62, 100 62, 110 64 C 90 67, 70 70, 58 66 Z" fill="#ffffff" opacity="0.25" />
+          </svg>
+
         </div>
 
-        {/* Global Keyframes Styles applied inline for fast render */}
+        {/* CSS Keyframes */}
         <style dangerouslySetInnerHTML={{__html: `
-          @keyframes float {
+          @keyframes robotFloat {
             0%, 100% { transform: translateY(0px) scale(1); }
-            50% { transform: translateY(-7px) scale(1.02); }
+            50% { transform: translateY(-6px) scale(1.02); }
           }
-          @keyframes floatArmLeft {
-            0%, 100% { transform: translateY(0px) rotate(-5deg); }
-            50% { transform: translateY(-2px) rotate(5deg); }
+          @keyframes robotAura {
+            0%, 100% { opacity: 0.3; transform: scale(0.96); }
+            50% { opacity: 0.85; transform: scale(1.08); }
           }
-          @keyframes floatArmRight {
-            0%, 100% { transform: translateY(0px) rotate(5deg); }
-            50% { transform: translateY(-2px) rotate(-5deg); }
+          @keyframes signalWave {
+            0% { r: 6px; opacity: 0.9; stroke-width: 2px; }
+            100% { r: 32px; opacity: 0; stroke-width: 0.5px; }
+          }
+          @keyframes eyeBlink {
+            0%, 88%, 100% { transform: scaleY(1); opacity: 1; transform-origin: center; }
+            92%, 96% { transform: scaleY(0.08); opacity: 0.3; transform-origin: center; }
+          }
+          @keyframes fingerPulse {
+            0%, 100% { transform: scale(0.85); opacity: 0.3; }
+            50% { transform: scale(1.4); opacity: 1; }
+          }
+          @keyframes dotBounce {
+            0%, 100% { transform: translateY(0); opacity: 0.4; }
+            50% { transform: translateY(-4px); opacity: 1; fill: #00ff66; }
           }
           @keyframes borderRotate {
             0% { background-position: 0% 50%; }
@@ -656,7 +833,7 @@ export const AIChatWidget: React.FC = () => {
         }`}
         title={lang === 'bn' ? 'তাউজুন এআই চ্যাট' : 'Tawzoon AI Chat'}
       >
-        <RenderCuteRobotLogo size="w-12 h-12 sm:w-14 sm:h-14 md:w-15 md:h-15" />
+        <RenderCuteRobotLogo size="w-14 h-14 sm:w-16 sm:h-16 md:w-18 md:h-18" />
       </button>
 
       {/* 2. Interactive Centered Rounded Modal */}
@@ -671,20 +848,9 @@ export const AIChatWidget: React.FC = () => {
               {/* Header with History Icon & Clean Actions */}
               <div className="bg-gradient-to-r from-[#005a24] to-[#009245] p-3 text-white flex items-center justify-between shrink-0 relative rounded-t-[18.5px] shadow-sm z-10">
                 <div className="flex items-center gap-2">
-                  {/* Floating robot head icon */}
-                  <div className="relative animate-[float_3s_ease-in-out_infinite] mr-0.5">
-                    <div className="absolute -inset-1 rounded-full bg-cyan-400/45 animate-ping opacity-75 scale-125" />
-                    <div className="w-8 h-8 rounded-full bg-white relative flex items-center justify-center border border-slate-100 shadow-md z-10">
-                      <div className="w-6 h-4.5 rounded-2xl bg-slate-900 flex flex-col items-center justify-center p-0.5 relative overflow-hidden">
-                        <div className="flex justify-between w-3.5 px-0.5 mb-0.5">
-                          <div className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
-                          <div className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
-                        </div>
-                        <div className="w-2 h-0.5 border-b border-cyan-400 rounded-full" />
-                      </div>
-                      <div className="absolute -left-1 w-1.5 h-3.5 bg-blue-400 rounded-l" />
-                      <div className="absolute -right-1 w-1.5 h-3.5 bg-blue-400 rounded-r" />
-                    </div>
+                  {/* Floating robot logo */}
+                  <div className="relative mr-1 cursor-pointer" onClick={() => setCurrentView('chat')}>
+                    <RenderCuteRobotLogo size="w-9 h-9 sm:w-10 sm:h-10" isCompact />
                   </div>
                   
                   <div className="text-left">
