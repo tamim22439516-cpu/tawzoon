@@ -40,6 +40,8 @@ interface AppContextType {
   setPublicCategory: (cat: string) => void;
   publicSearch: string;
   setPublicSearch: (search: string) => void;
+  selectedPublicSubcategory: string | null;
+  setSelectedPublicSubcategory: (sub: string | null) => void;
 
   // Selected product details modal
   selectedProduct: Product | null;
@@ -230,8 +232,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [activePortal, setActivePortalState] = useState<'public' | 'employee' | 'admin'>(getInitialPortal);
   const [userNavTab, setUserNavTabState] = useState<UserNavTab>('home');
-  const [publicCategory, setPublicCategory] = useState<string>('all');
+  const [publicCategory, setPublicCategoryState] = useState<string>('all');
   const [publicSearch, setPublicSearch] = useState<string>('');
+  const [selectedPublicSubcategory, setSelectedPublicSubcategory] = useState<string | null>(null);
+
+  const setPublicCategory = (cat: string) => {
+    setPublicCategoryState(cat);
+    if (cat === 'all') {
+      setSelectedPublicSubcategory(null);
+    }
+  };
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showPromo, setShowPromoState] = useState<boolean>(true);
 
@@ -684,6 +694,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPublicCategory,
         publicSearch,
         setPublicSearch,
+        selectedPublicSubcategory,
+        setSelectedPublicSubcategory,
         selectedProduct,
         setSelectedProduct,
         adminToken,

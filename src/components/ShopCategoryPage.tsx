@@ -397,12 +397,21 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
   products,
   loading,
 }) => {
-  const { lang, setPublicCategory, showPromo, subsections, brandSettings, categories, publicSearch, showToast } = useApp();
+  const { lang, setPublicCategory, setPublicSearch, showPromo, subsections, brandSettings, categories, publicSearch, showToast, selectedPublicSubcategory, setSelectedPublicSubcategory } = useApp();
 
   const currentSlug = categorySlug.toLowerCase().trim();
 
   // If null -> Category Overview Page
-  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(selectedPublicSubcategory);
+
+  useEffect(() => {
+    setSelectedSubCategory(selectedPublicSubcategory);
+  }, [selectedPublicSubcategory]);
+
+  const handleSelectSubCategory = (sub: string | null) => {
+    setSelectedSubCategory(sub);
+    setSelectedPublicSubcategory(sub);
+  };
 
   // If viewing a product -> Product Details Page
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -446,7 +455,6 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
         setSelectedSubCategory(foundSubName);
       }
     } else {
-      setSelectedSubCategory(null);
       setViewingProduct(null);
     }
   }, [publicSearch, subsections, products, lang]);
@@ -827,7 +835,11 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
             <div className="bg-white dark:bg-slate-900 py-1.5 sm:py-2 px-3 sm:px-4 rounded-xl shadow-2xs border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <button
-                  onClick={() => setPublicCategory('all')}
+                  onClick={() => {
+                    setPublicCategory('all');
+                    setSelectedPublicSubcategory(null);
+                    setPublicSearch('');
+                  }}
                   className="px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg inline-flex items-center gap-1 transition-colors shadow-2xs cursor-pointer shrink-0 active:scale-95"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
@@ -905,11 +917,8 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
 
                     <button
                       onClick={() => {
-                        if (group.items && group.items.length > 0 && group.items[0]?.nameBn) {
-                          setSelectedSubCategory(group.items[0].nameBn);
-                        } else {
-                          setSelectedSubCategory(group.titleBn || 'all');
-                        }
+                        const target = (group.items && group.items.length > 0 && group.items[0]?.nameBn) ? group.items[0].nameBn : (group.titleBn || 'all');
+                        handleSelectSubCategory(target);
                       }}
                       className="text-[10px] sm:text-xs font-bold text-slate-800 hover:text-[#009245] transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
                     >
@@ -923,7 +932,7 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
                     {group.items.map((item) => (
                       <div
                         key={item.id}
-                        onClick={() => setSelectedSubCategory(item.nameBn)}
+                        onClick={() => handleSelectSubCategory(item.nameBn)}
                         className="group cursor-pointer bg-white rounded-xl border border-slate-200/90 p-1.5 sm:p-2.5 hover:shadow-xs hover:border-[#009245] transition-all duration-200 flex flex-col justify-between active:scale-95"
                       >
                         {/* Image container */}
@@ -975,7 +984,19 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
             <div className="bg-white dark:bg-slate-900 py-1.5 sm:py-2 px-3 sm:px-4 rounded-xl shadow-2xs border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 <button
-                  onClick={() => setSelectedSubCategory(null)}
+                  onClick={() => {
+                    if (publicSearch && publicSearch.trim()) {
+                      setPublicSearch('');
+                      setSelectedPublicSubcategory(null);
+                      setSelectedSubCategory(null);
+                    } else if (selectedSubCategory !== null) {
+                      handleSelectSubCategory(null);
+                    } else {
+                      setPublicCategory('all');
+                      setSelectedPublicSubcategory(null);
+                      setPublicSearch('');
+                    }
+                  }}
                   className="px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg inline-flex items-center gap-1 transition-colors shadow-2xs cursor-pointer shrink-0 active:scale-95"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
@@ -1003,7 +1024,19 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
             <div className="bg-white dark:bg-slate-900 py-1 sm:py-1.5 px-2.5 sm:px-3 rounded-xl shadow-2xs border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <button
-                  onClick={() => setSelectedSubCategory(null)}
+                  onClick={() => {
+                    if (publicSearch && publicSearch.trim()) {
+                      setPublicSearch('');
+                      setSelectedPublicSubcategory(null);
+                      setSelectedSubCategory(null);
+                    } else if (selectedSubCategory !== null) {
+                      handleSelectSubCategory(null);
+                    } else {
+                      setPublicCategory('all');
+                      setSelectedPublicSubcategory(null);
+                      setPublicSearch('');
+                    }
+                  }}
                   className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-bold text-slate-800 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg inline-flex items-center gap-1 transition-colors shadow-2xs cursor-pointer shrink-0 active:scale-95"
                 >
                   <ChevronLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />

@@ -27,6 +27,8 @@ export const PublicStorefront: React.FC = () => {
     setPublicCategory,
     publicSearch,
     setPublicSearch,
+    selectedPublicSubcategory,
+    setSelectedPublicSubcategory,
     refreshBootstrap,
     activePortal,
     subsections,
@@ -46,7 +48,7 @@ export const PublicStorefront: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(() => products.length === 0);
   const [sortOrder, setSortOrder] = useState<string>('default');
   const [activeFilterTag] = useState<'all' | 'featured' | 'trending' | 'new_arrival'>('all');
-  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(selectedPublicSubcategory);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [inPageTab, setInPageTab] = useState<'all' | 'wishlist'>('all');
   const [error, setError] = useState<string | null>(null);
@@ -431,6 +433,8 @@ export const PublicStorefront: React.FC = () => {
 
               <button
                 onClick={() => {
+                  setPublicSearch('');
+                  setSelectedPublicSubcategory(null);
                   setPublicCategory('shop');
                   setSelectedSubCategory(null);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -452,6 +456,8 @@ export const PublicStorefront: React.FC = () => {
                   <div
                     key={cat.id}
                     onClick={() => {
+                      setPublicSearch('');
+                      setSelectedPublicSubcategory(null);
                       setPublicCategory(cat.slug);
                       setSelectedSubCategory(null);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -476,6 +482,8 @@ export const PublicStorefront: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            setPublicSearch('');
+                            setSelectedPublicSubcategory(null);
                             setPublicCategory(cat.slug);
                             setSelectedSubCategory(null);
                             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -625,8 +633,10 @@ export const PublicStorefront: React.FC = () => {
                       <div
                         key={item.id}
                         onClick={() => {
-                          setSelectedSubCategory(item.nameBn);
-                          window.scrollTo({ top: 300, behavior: 'smooth' });
+                          setPublicSearch('');
+                          setSelectedPublicSubcategory(item.nameBn);
+                          setPublicCategory(publicCategory !== 'all' ? publicCategory : 'shop');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
                         className="group cursor-pointer bg-white rounded-xl border border-slate-200/90 p-1.5 sm:p-2.5 hover:shadow-md hover:-translate-y-1 hover:border-[#009245] transition-all duration-300 flex flex-col justify-between active:scale-95"
                       >
