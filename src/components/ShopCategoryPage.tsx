@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext.js';
-import { Product, HeroSlideItem } from '../types/index.js';
+import { Product, HeroSlideItem, Subsection } from '../types/index.js';
 import { ProductCard } from './ProductCard.js';
 import { ProductDetailsPage } from './ProductDetailsPage.js';
 import { SLIDE_THEMES } from './HeroSection.js';
@@ -44,14 +44,181 @@ export const isCategoryMatch = (slugA?: string, slugB?: string): boolean => {
   return false;
 };
 
-const normalizeBengali = (str: string | undefined | null): string => {
+export const normalizeBengali = (str: string | undefined | null): string => {
   if (!str) return '';
   return str
     .toLowerCase()
     .replace(/\u09DF/g, '\u09AF') // Replace য় (U+09DF) with য (U+09AF)
     .replace(/\u09DC/g, '\u09A1') // Replace ড় with ড
     .replace(/\u09DD/g, '\u09A2') // Replace ঢ় with ঢ
+    .replace(/\u09C0/g, '\u09BF') // Replace ী with ি
+    .replace(/\u09C2/g, '\u09C1') // Replace ূ with ু
+    .replace(/\u0982/g, '\u0999') // Replace ং with ঙ
+    .replace(/[\u0981।!?.,;:_#"'`\(\)\[\]\{\}]/g, '') // Remove punctuation & diacritics
     .trim();
+};
+
+export const toCompactKey = (str: string | undefined | null): string => {
+  if (!str) return '';
+  return normalizeBengali(str)
+    .replace(/[-\s]/g, '')
+    .trim();
+};
+
+export const GENERIC_SEARCH_WORDS = [
+  'shirt', 'শার্ট', 'tshirt', 'টিশার্ট', 'টি-শার্ট', 'pant', 'প্যান্ট', 'cloth', 'পোশাক', 'ড্রেস', 'dress', 'collection', 'কালেকশন'
+];
+
+export const SUBSECTION_ALIAS_PAIRS: Array<[string[], string]> = [
+  [['katuya', 'katua', 'katuwa', 'কাতুয়া', 'কাতুয়া'], 'কাতুয়া'],
+  [['panjabi', 'punjabi', 'পাঞ্জাবি', 'পাঞ্জাবী'], 'পাঞ্জাবি'],
+  [['polo', 'poloshirt', 'পোলো', 'পোলোশার্ট', 'পোলো শার্ট'], 'পোলো শার্ট'],
+  [['basictshirt', 'basict-shirt', 'basicshirt', 'বেসিকটিশার্ট', 'বেসিকটি-শার্ট', 'বেসিক টি-শার্ট', 'বেসিক টিশার্ট', 'বেসিক টি শার্ট'], 'বেসিক টিশার্ট'],
+  [['dropshoulder', 'dropshouldertshirt', 'ড্রপশোল্ডার', 'ড্রপশোল্ডারটিশার্ট', 'ড্রপ শোল্ডার টিশার্ট', 'ড্রপ শোল্ডার টি-শার্ট'], 'ড্রপশোল্ডার টিশার্ট'],
+  [['longsleeve', 'longsleevetshirt', 'লংস্লিভ', 'লংস্লিভটিশার্ট', 'লং-স্লিভটিশার্ট', 'লং-স্লিভ টিশার্ট', 'লং স্লিভ টি-শার্ট'], 'লং-স্লিভ টিশার্ট'],
+  [['printshirt', 'printedshirt', 'প্রিন্টশার্ট', 'প্রিন্ট শার্ট'], 'প্রিন্ট শার্ট'],
+  [['book', 'books', 'বই'], 'book'],
+  [['bangla', 'বাংলা'], 'bangla'],
+];
+
+export const QUALIFIER_GROUPS: string[][] = [
+  ['পোলো', 'polo'],
+  ['বেসিক', 'basic'],
+  ['ড্রপশোল্ডার', 'dropshoulder'],
+  ['লংস্লিভ', 'longsleeve'],
+  ['প্রিন্ট', 'print'],
+  ['কাতুয়া', 'katua', 'katuya'],
+  ['পাঞ্জাবি', 'panjabi', 'punjabi'],
+  ['book', 'বই']
+];
+
+export const hasQualifierConflict = (qComp: string, sComp: string): boolean => {
+  for (const qGroup of QUALIFIER_GROUPS) {
+    const qHas = qGroup.some(w => qComp.includes(toCompactKey(w)));
+    const sHas = qGroup.some(w => sComp.includes(toCompactKey(w)));
+    if (qHas && !sHas) {
+      // Check if s has a different qualifier
+      for (const otherGroup of QUALIFIER_GROUPS) {
+        if (otherGroup !== qGroup && otherGroup.some(w => sComp.includes(toCompactKey(w)))) {
+          return true; // Conflict! E.g. query has 'বেসিক', s has 'পোলো'
+        }
+      }
+    }
+  }
+  return false;
+};
+
+export const findBestMatchingSubsection = (query: string, subs: Subsection[]): Subsection | null => {
+  if (!query || !query.trim() || !subs || subs.length === 0) return null;
+  const rawQ = query.trim();
+  const qComp = toCompactKey(rawQ);
+  if (!qComp) return null;
+
+  let bestSub: Subsection | null = null;
+  let bestScore = 0;
+
+  for (const s of subs) {
+    if (!s || !s.name) continue;
+    const sRaw = s.name.trim();
+    const sComp = toCompactKey(sRaw);
+    if (!sComp) continue;
+
+    // Reject conflicts immediately (e.g. searching 'বেসিক টি-শার্ট' must never match 'পোলো শার্ট')
+    if (hasQualifierConflict(qComp, sComp)) {
+      continue;
+    }
+
+    let score = 0;
+
+    // 1. Exact compact equality (e.g. 'বেসিক টি-শার্ট' matches 'বেসিক টিশার্ট')
+    if (qComp === sComp) {
+      score = 1000;
+    }
+
+    // 2. Alias group match (e.g. 'basic tshirt' matches 'বেসিক টিশার্ট')
+    if (score < 1000) {
+      for (const [aliases, canonical] of SUBSECTION_ALIAS_PAIRS) {
+        const cComp = toCompactKey(canonical);
+        const matchesS = (sComp === cComp) || aliases.some(a => toCompactKey(a) === sComp);
+        const matchesQ = (qComp === cComp) || aliases.some(a => toCompactKey(a) === qComp);
+        if (matchesS && matchesQ) {
+          score = 900;
+          break;
+        }
+      }
+    }
+
+    // 3. Substring inclusion if not a purely generic single word
+    if (score === 0) {
+      const isGeneric = GENERIC_SEARCH_WORDS.some(w => toCompactKey(w) === qComp);
+      if (!isGeneric) {
+        if (sComp.includes(qComp) && qComp.length >= 4) {
+          score = 600 + (qComp.length / sComp.length) * 100;
+        } else if (qComp.includes(sComp) && sComp.length >= 4) {
+          score = 500 + (sComp.length / qComp.length) * 100;
+        }
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestSub = s;
+    }
+  }
+
+  return bestScore >= 500 ? bestSub : null;
+};
+
+export const getBilingualSearchTerms = (query: string): string[] => {
+  const raw = query.toLowerCase().trim();
+  const clean = normalizeBengali(raw).replace(/^#/, '');
+  const terms = new Set<string>([raw, clean]);
+
+  if (raw.includes('-')) {
+    terms.add(raw.replace(/-/g, ''));
+    terms.add(raw.replace(/-/g, ' '));
+  }
+  if (clean.includes('-')) {
+    terms.add(clean.replace(/-/g, ''));
+    terms.add(clean.replace(/-/g, ' '));
+  }
+
+  const isTShirt = /t-?shirt|টি-?শার্ট|টিশার্ট|টি\s*শার্ট/i.test(raw) || /t-?shirt|টি-?শার্ট|টিশার্ট|টি\s*শার্ট/i.test(clean);
+  const isPolo = /polo|পোলো/i.test(raw) || /polo|পোলো/i.test(clean);
+  const isBasic = /basic|বেসিক/i.test(raw) || /basic|বেসিক/i.test(clean);
+
+  if (isBasic && isTShirt) {
+    ['basic tshirt', 'basic t-shirt', 'বেসিক টিশার্ট', 'বেসিক টি-শার্ট', 'বেসিক টি শার্ট'].forEach(a => terms.add(a));
+  } else if (isTShirt) {
+    ['tshirt', 't-shirt', 'টি-শার্ট', 'টিশার্ট', 'টি শার্ট'].forEach(a => terms.add(a));
+  } else if (isPolo) {
+    ['polo', 'পোলো', 'polo shirt', 'পোলো শার্ট'].forEach(a => terms.add(a));
+  } else if (/shirt|শার্ট/i.test(raw) || /shirt|শার্ট/i.test(clean)) {
+    ['shirt', 'শার্ট'].forEach(a => terms.add(a));
+  }
+
+  const otherAliases: Array<[RegExp, string[]]> = [
+    [/katuya|katua|katuwa|কাতুয়া|কাতুয়া/i, ['katuya', 'katua', 'katuwa', 'কাতুয়া', 'কাতুয়া']],
+    [/panjabi|punjabi|পাঞ্জাবি|পাঞ্জাবী/i, ['panjabi', 'punjabi', 'পাঞ্জাবি', 'পাঞ্জাবী']],
+    [/book|books|বই/i, ['book', 'books', 'বই']],
+    [/gadget|gadgets|গ্যাজেট/i, ['gadget', 'gadgets', 'tech', 'গ্যাজেট', 'টেকনোলজি']],
+    [/watch|smartwatch|ঘড়ি|ঘড়ি/i, ['watch', 'smartwatch', 'ঘড়ি', 'ঘড়ি']],
+    [/headphone|headphones|হেডফোন/i, ['headphone', 'headphones', 'earbuds', 'হেডফোন']],
+    [/shoe|shoes|জুতা|জুতো/i, ['shoe', 'shoes', 'জুতা', 'জুতো']],
+    [/jacket|জ্যাকেট/i, ['jacket', 'জ্যাকেট']],
+    [/pant|pants|প্যান্ট/i, ['pant', 'pants', 'প্যান্ট']],
+    [/dropshoulder|ড্রপশোল্ডার|ড্রপ\s*শোল্ডার/i, ['dropshoulder', 'ড্রপশোল্ডার', 'ড্রপ শোল্ডার টিশার্ট']],
+    [/longsleeve|লংস্লিভ|লং-?স্লিভ/i, ['longsleeve', 'লংস্লিভ', 'লং-স্লিভ টিশার্ট']],
+    [/printshirt|প্রিন্ট\s*শার্ট/i, ['print shirt', 'printed shirt', 'প্রিন্ট শার্ট']],
+  ];
+
+  for (const [pattern, aliases] of otherAliases) {
+    if (pattern.test(raw) || pattern.test(clean)) {
+      aliases.forEach(a => terms.add(a));
+    }
+  }
+
+  return Array.from(terms);
 };
 
 const DEFAULT_HERO_SLIDES: HeroSlideItem[] = [
@@ -139,12 +306,38 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
   products,
   loading,
 }) => {
-  const { lang, setPublicCategory, showPromo, subsections, brandSettings, categories } = useApp();
+  const { lang, setPublicCategory, showPromo, subsections, brandSettings, categories, publicSearch } = useApp();
 
   const currentSlug = categorySlug.toLowerCase().trim();
 
   // If null -> Category Overview Page
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+
+  // Sync publicSearch from Header search with Public Category page
+  useEffect(() => {
+    if (publicSearch && publicSearch.trim()) {
+      const q = publicSearch.trim();
+      const matched = findBestMatchingSubsection(q, subsections || []);
+      if (matched) {
+        setSelectedSubCategory(matched.name);
+      } else {
+        let foundSubName: string | null = null;
+        const qComp = toCompactKey(q);
+        const prodMatch = (products || []).find(p => {
+          const pSubBn = toCompactKey(p.subcategoryBn);
+          const pSubEn = toCompactKey(p.subcategoryEn);
+          return (pSubBn && (pSubBn === qComp || (qComp.length >= 4 && pSubBn.includes(qComp)))) ||
+                 (pSubEn && (pSubEn === qComp || (qComp.length >= 4 && pSubEn.includes(qComp))));
+        });
+        if (prodMatch && prodMatch.subcategoryBn) {
+          foundSubName = prodMatch.subcategoryBn;
+        }
+        setSelectedSubCategory(foundSubName);
+      }
+    } else {
+      setSelectedSubCategory(null);
+    }
+  }, [publicSearch, subsections, products]);
 
   const isAllOrShopTab = currentSlug === 'shop_tab' || currentSlug === 'all';
   const isGadget = currentSlug === 'gadgets' || currentSlug === 'gajet' || currentSlug.includes('gadget') || currentSlug.includes('tech');
@@ -396,20 +589,51 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
     );
 
     if (selectedSubCategory) {
-      const sBn = normalizeBengali(selectedSubCategory);
+      const sComp = toCompactKey(selectedSubCategory);
       list = list.filter(p => {
-        const pSubBn = normalizeBengali(p.subcategoryBn);
-        const pSubEn = (p.subcategoryEn || '').toLowerCase();
-        const pNameBn = normalizeBengali(p.nameBn);
-        const pNameEn = (p.nameEn || '').toLowerCase();
+        const pSubBn = toCompactKey(p.subcategoryBn);
+        const pSubEn = toCompactKey(p.subcategoryEn);
+        const pNameBn = toCompactKey(p.nameBn);
+        const pNameEn = toCompactKey(p.nameEn);
         return (
-          pSubBn.includes(sBn) ||
-          sBn.includes(pSubBn) ||
-          pSubEn.includes(sBn) ||
-          pNameBn.includes(sBn) ||
-          pNameEn.includes(sBn)
+          (pSubBn && (pSubBn === sComp || pSubBn.includes(sComp) || sComp.includes(pSubBn))) ||
+          (pSubEn && (pSubEn === sComp || pSubEn.includes(sComp) || sComp.includes(pSubEn))) ||
+          pNameBn.includes(sComp) ||
+          pNameEn.includes(sComp)
         );
       });
+    } else if (publicSearch && publicSearch.trim()) {
+      const rawQ = publicSearch.toLowerCase().trim();
+      const cleanQ = rawQ.replace(/^#/, '');
+      const terms = getBilingualSearchTerms(publicSearch);
+
+      const exactCodeProd = list.find(p => {
+        const code = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
+        const pId = (p.id || '').toLowerCase().trim();
+        return code === cleanQ || code === rawQ || pId === cleanQ || pId === rawQ;
+      });
+
+      if (exactCodeProd) {
+        list = [exactCodeProd];
+      } else {
+        list = list.filter(p => {
+          const pCode = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
+          const pId = (p.id || '').toLowerCase().trim();
+          const pNameBn = normalizeBengali(p.nameBn);
+          const pNameEn = (p.nameEn || '').toLowerCase();
+          const pSubBn = normalizeBengali(p.subcategoryBn);
+          const pSubEn = (p.subcategoryEn || '').toLowerCase();
+
+          return terms.some(t =>
+            pCode.includes(t) ||
+            pId === t ||
+            pNameBn.includes(t) ||
+            pNameEn.includes(t) ||
+            pSubBn.includes(t) ||
+            pSubEn.includes(t)
+          );
+        });
+      }
     }
 
     if (maxPrice) {
@@ -417,7 +641,7 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
     }
 
     return list;
-  }, [currentSlug, products, selectedSubCategory, maxPrice, isAllOrShopTab]);
+  }, [currentSlug, products, selectedSubCategory, publicSearch, maxPrice, isAllOrShopTab]);
 
   const toggleBrand = (brand: string) => {
     setSelectedBrands(prev =>
@@ -445,9 +669,9 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
       <ScrollReveal className="space-y-2.5 sm:space-y-4" delay={0} duration={300}>
       
       {/* ------------------------------------------------------------- */}
-      {/* CASE 1: CATEGORY OVERVIEW PAGE (Matches Image 2 Exactly)       */}
+      {/* CASE 1: CATEGORY OVERVIEW PAGE (Only when no search is active) */}
       {/* ------------------------------------------------------------- */}
-      {selectedSubCategory === null ? (
+      {selectedSubCategory === null && !publicSearch?.trim() ? (
         <div className="space-y-2 sm:space-y-4">
           
           {/* Top Strip Bar: Conditional layer depending on whether opened from 'সকল পণ্য' bottom tab or Homepage explore */}
@@ -637,7 +861,9 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
                     <span>{lang === 'bn' ? 'সকল পণ্য' : 'All Products'}</span>
                   </button>
                   <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span className="text-slate-900 dark:text-white font-black truncate">{selectedSubCategory}</span>
+                  <span className="text-slate-900 dark:text-white font-black truncate">
+                    {selectedSubCategory || (lang === 'bn' ? `"${publicSearch}" এর সার্চ রেজাল্ট` : `Search: "${publicSearch}"`)}
+                  </span>
                 </div>
               </div>
               <div className="bg-emerald-50 text-[#009245] font-extrabold text-xs px-2.5 py-1 rounded-lg border border-emerald-200/80 shadow-2xs shrink-0">
@@ -670,7 +896,9 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
                     {categoryConfig.title}
                   </button>
                   <ChevronRight className="w-2.5 h-2.5 text-slate-300 shrink-0" />
-                  <span className="text-slate-900 dark:text-white font-black truncate">{selectedSubCategory}</span>
+                  <span className="text-slate-900 dark:text-white font-black truncate">
+                    {selectedSubCategory || (lang === 'bn' ? `"${publicSearch}" এর সার্চ রেজাল্ট` : `Search: "${publicSearch}"`)}
+                  </span>
                 </nav>
               </div>
             </div>
@@ -682,7 +910,7 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
             {/* Title & Count */}
             <div className="flex items-center gap-1.5">
               <h2 className="text-xs sm:text-base font-black text-slate-900 dark:text-white tracking-tight">
-                {selectedSubCategory}
+                {selectedSubCategory || (lang === 'bn' ? `"${publicSearch}" এর সার্চ রেজাল্ট` : `Search: "${publicSearch}"`)}
               </h2>
               <span className="bg-emerald-50 text-[#009245] border border-emerald-200 text-[9.5px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded-full">
                 {displayProducts.length} {lang === 'bn' ? 'টি পণ্য' : 'items'}
@@ -788,7 +1016,9 @@ export const ShopCategoryPage: React.FC<ShopCategoryPageProps> = ({
                 <Shirt className="w-7 h-7" />
               </div>
               <h3 className="text-base sm:text-lg font-black text-slate-900">
-                {lang === 'bn' ? `"${selectedSubCategory}" এ বর্তমানে কোনো পণ্য নেই` : `No products found in "${selectedSubCategory}"`}
+                {selectedSubCategory
+                  ? (lang === 'bn' ? `"${selectedSubCategory}" এ বর্তমানে কোনো পণ্য নেই` : `No products found in "${selectedSubCategory}"`)
+                  : (lang === 'bn' ? `"${publicSearch || ''}" এর জন্য কোনো পণ্য পাওয়া যায়নি` : `No products found for "${publicSearch || ''}"`)}
               </h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                 {lang === 'bn'

@@ -220,10 +220,7 @@ export const Navbar: React.FC = () => {
     if (activePortal === 'employee') {
       setResellerTab('catalog');
     }
-    const el = document.getElementById('catalog-section') || document.getElementById('products-section');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -323,8 +320,17 @@ export const Navbar: React.FC = () => {
               )}
               <button
                 onClick={() => {
-                  setActivePortal('public');
-                  setPublicCategory('all');
+                  if (setSelectedProduct) setSelectedProduct(null);
+                  if (setPublicSearch) setPublicSearch('');
+                  if (activePortal === 'employee' || isEmployeeAuthenticated) {
+                    setActivePortal('employee');
+                    if (setResellerTab) setResellerTab('catalog');
+                  } else if (activePortal === 'admin') {
+                    setActivePortal('admin');
+                  } else {
+                    setActivePortal('public');
+                    if (setPublicCategory) setPublicCategory('all');
+                  }
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
                 className="flex items-center gap-2 text-left group focus:outline-none cursor-pointer shrink-0"

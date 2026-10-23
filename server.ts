@@ -366,38 +366,128 @@ app.get('/api/public/products', (req: Request, res: Response) => {
       .replace(/\u09DC/g, '\u09A1')
       .replace(/\u09DD/g, '\u09A2');
 
-    // Find exact product code match
-    const exactCodeProduct = results.find(p => {
+    // Check if input is a URL / Product Link or contains product ID / Code in link
+    let exactLinkProduct: Product | undefined;
+    const isUrl = rawQ.includes('http://') || rawQ.includes('https://') || rawQ.includes('www.') || rawQ.includes('localhost') || rawQ.includes('/product/') || rawQ.includes('/p/') || rawQ.includes('product=') || rawQ.includes('code=');
+
+    if (isUrl) {
+      try {
+        const urlObj = new URL(rawQ.startsWith('http') ? rawQ : `https://${rawQ}`);
+        const paramId = urlObj.searchParams.get('product') || urlObj.searchParams.get('id') || urlObj.searchParams.get('code') || urlObj.searchParams.get('productCode');
+        if (paramId) {
+          const pMatch = results.find(p => p.id === paramId || (p.productCode && p.productCode.toLowerCase().trim().replace(/^#/, '') === paramId.toLowerCase().trim().replace(/^#/, '')));
+          if (pMatch) exactLinkProduct = pMatch;
+        }
+        if (!exactLinkProduct) {
+          const segments = urlObj.pathname.split('/').filter(Boolean);
+          for (const seg of segments) {
+            const cleanSeg = seg.toLowerCase().trim().replace(/^#/, '');
+            const pMatch = results.find(p => p.id === seg || (p.productCode && p.productCode.toLowerCase().trim().replace(/^#/, '') === cleanSeg));
+            if (pMatch) { exactLinkProduct = pMatch; break; }
+          }
+        }
+      } catch {}
+      if (!exactLinkProduct) {
+        exactLinkProduct = results.find(p => (p.productCode && p.productCode.length >= 2 && rawQ.includes(p.productCode.toLowerCase().trim().replace(/^#/, ''))) || (p.id && p.id.length >= 3 && rawQ.includes(p.id.toLowerCase())));
+      }
+    }
+
+    // Find exact product code or ID match
+    const exactCodeProduct = exactLinkProduct || results.find(p => {
       const code = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
-      return code === cleanQ || code === rawQ;
+      const pId = (p.id || '').toLowerCase().trim();
+      return code === cleanQ || code === rawQ || pId === cleanQ || pId === rawQ;
     });
+
+    // Transliteration & alias mappings for bilingual search (Bangla + English)
+    const searchTerms = new Set<string>([rawQ, cleanQ]);
+
+    if (rawQ.includes('-')) {
+      searchTerms.add(rawQ.replace(/-/g, ''));
+      searchTerms.add(rawQ.replace(/-/g, ' '));
+    }
+    if (cleanQ.includes('-')) {
+      searchTerms.add(cleanQ.replace(/-/g, ''));
+      searchTerms.add(cleanQ.replace(/-/g, ' '));
+    }
+
+    const isTShirt = /t-?shirt|টি-?শার্ট|টিশার্ট|টি\s*শার্ট/i.test(rawQ) || /t-?shirt|টি-?শার্ট|টিশার্ট|টি\s*শার্ট/i.test(cleanQ);
+    const isPolo = /polo|পোলো/i.test(rawQ) || /polo|পোলো/i.test(cleanQ);
+    const isBasic = /basic|বেসিক/i.test(rawQ) || /basic|বেসিক/i.test(cleanQ);
+
+    if (isBasic && isTShirt) {
+      ['basic tshirt', 'basic t-shirt', 'বেসিক টিশার্ট', 'বেসিক টি-শার্ট', 'বেসিক টি শার্ট'].forEach(a => searchTerms.add(a));
+    } else if (isTShirt) {
+      ['tshirt', 't-shirt', 'টি-শার্ট', 'টিশার্ট', 'টি শার্ট'].forEach(a => searchTerms.add(a));
+    } else if (isPolo) {
+      ['polo', 'পোলো', 'polo shirt', 'পোলো শার্ট'].forEach(a => searchTerms.add(a));
+    } else if (/shirt|শার্ট/i.test(rawQ) || /shirt|শার্ট/i.test(cleanQ)) {
+      ['shirt', 'শার্ট'].forEach(a => searchTerms.add(a));
+    }
+
+    const aliasMap: Array<[RegExp, string[]]> = [
+      [/katuya|katua|katuwa|কাতুয়া|কাতুয়া/i, ['katuya', 'katua', 'katuwa', 'কাতুয়া', 'কাতুয়া']],
+      [/panjabi|punjabi|পাঞ্জাবি|পাঞ্জাবী/i, ['panjabi', 'punjabi', 'পাঞ্জাবি', 'পাঞ্জাবী']],
+      [/book|books|বই/i, ['book', 'books', 'বই']],
+      [/gadget|gadgets|গ্যাজেট/i, ['gadget', 'gadgets', 'tech', 'গ্যাজেট', 'টেকনোলজি']],
+      [/watch|smartwatch|ঘড়ি|ঘড়ি/i, ['watch', 'smartwatch', 'ঘড়ি', 'ঘড়ি']],
+      [/headphone|headphones|হেডফোন/i, ['headphone', 'headphones', 'earbuds', 'হেডফোন']],
+      [/shoe|shoes|জুতা|জুতো/i, ['shoe', 'shoes', 'জুতা', 'জুতো']],
+      [/jacket|জ্যাকেট/i, ['jacket', 'জ্যাকেট']],
+      [/pant|pants|প্যান্ট/i, ['pant', 'pants', 'প্যান্ট']],
+      [/dropshoulder|ড্রপশোল্ডার|ড্রপ\s*শোল্ডার/i, ['dropshoulder', 'ড্রপশোল্ডার', 'ড্রপ শোল্ডার টিশার্ট']],
+      [/longsleeve|লংস্লিভ|লং-?স্লিভ/i, ['longsleeve', 'লংস্লিভ', 'লং-স্লিভ টিশার্ট']],
+      [/printshirt|প্রিন্ট\s*শার্ট/i, ['print shirt', 'printed shirt', 'প্রিন্ট শার্ট']],
+    ];
+
+    for (const [pattern, aliases] of aliasMap) {
+      if (pattern.test(rawQ) || pattern.test(cleanQ)) {
+        aliases.forEach(a => searchTerms.add(a));
+      }
+    }
+    const termsArray = Array.from(searchTerms);
+
+    // Check for Category cross-language terms
+    const isClothingSearch = ['shop', 'clothing', 'fashion', 'style', 'পোশাক', 'ফ্যাশন', 'শপ', 'ছেলেদের পোশাক', 'মেয়েদের পোশাক', 'কাপড়'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
+    const isGadgetSearch = ['gadget', 'gadgets', 'tech', 'electronics', 'গ্যাজেট', 'ইলেকট্রনিক্স', 'টেকনোলজি', 'স্মার্ট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
+    const isOtherSearch = ['other', 'others', 'lifestyle', 'অন্যান্য', 'লাইফস্টাইল', 'বই', 'গিফট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
 
     results = results.filter(p => {
       const pCode = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
+      const pId = (p.id || '').toLowerCase().trim();
       const pNameBn = (p.nameBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
       const pNameEn = (p.nameEn || '').toLowerCase();
       const pSubBn = (p.subcategoryBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
       const pSubEn = (p.subcategoryEn || '').toLowerCase();
+      const pCatSlug = (p.categorySlug || '').toLowerCase();
       const pShortDescBn = (p.shortDescBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
       const pShortDescEn = (p.shortDescEn || '').toLowerCase();
       const pFullDescBn = (p.fullDescBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
 
+      const matchesCategory =
+        (isClothingSearch && ['shop', 'style', 'fashion', 'lifestyle'].includes(pCatSlug)) ||
+        (isGadgetSearch && ['gajet', 'gadget', 'gadgets', 'tech'].includes(pCatSlug)) ||
+        (isOtherSearch && ['other', 'others'].includes(pCatSlug));
+
       return (
-        pCode.includes(cleanQ) ||
-        pCode.includes(rawQ) ||
-        pNameBn.includes(cleanQ) ||
-        pNameEn.includes(cleanQ) ||
-        pSubBn.includes(cleanQ) ||
-        pSubEn.includes(cleanQ) ||
-        pShortDescBn.includes(cleanQ) ||
-        pShortDescEn.includes(cleanQ) ||
-        pFullDescBn.includes(cleanQ)
+        termsArray.some(t =>
+          pCode.includes(t) ||
+          pId === t ||
+          pNameBn.includes(t) ||
+          pNameEn.includes(t) ||
+          pSubBn.includes(t) ||
+          pSubEn.includes(t) ||
+          pCatSlug.includes(t) ||
+          pShortDescBn.includes(t) ||
+          pShortDescEn.includes(t) ||
+          pFullDescBn.includes(t)
+        ) || matchesCategory
       );
     });
 
-    // If an exact product code match exists, put it at index 0
+    // If an exact product code or link match exists, show ONLY that matching product
     if (exactCodeProduct) {
-      results.sort((a, b) => (a.id === exactCodeProduct.id ? -1 : b.id === exactCodeProduct.id ? 1 : 0));
+      results = [exactCodeProduct];
     }
   }
 

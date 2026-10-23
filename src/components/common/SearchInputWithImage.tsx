@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { Search, Camera, X, Sparkles, Image as ImageIcon } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Search, Camera, X, Sparkles, Image as ImageIcon, History, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.js';
 
 interface SearchInputWithImageProps {
@@ -25,13 +25,64 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
 }) => {
   const { lang, startVisualSearch, showToast } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+
+  // Load search history from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tawzoon_search_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setSearchHistory(parsed);
+      }
+    } catch {}
+  }, []);
+
+  // Save term to search history
+  const saveToHistory = (term: string) => {
+    const clean = term.trim();
+    if (!clean || clean.length < 2 || clean.startsWith('http://') || clean.startsWith('https://')) return;
+    setSearchHistory(prev => {
+      const filtered = prev.filter(item => item.toLowerCase() !== clean.toLowerCase());
+      const updated = [clean, ...filtered].slice(0, 8);
+      try {
+        localStorage.setItem('tawzoon_search_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Delete a single search history item
+  const deleteHistoryItem = (e: React.MouseEvent, itemToDelete: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSearchHistory(prev => {
+      const updated = prev.filter(item => item !== itemToDelete);
+      try {
+        localStorage.setItem('tawzoon_search_history', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       startVisualSearch(file);
-      // Reset input value so same file can be re-selected if needed
       e.target.value = '';
     }
   };
@@ -63,6 +114,10 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
   };
 
   const triggerSearchAction = () => {
+    if (value.trim()) {
+      saveToHistory(value);
+    }
+    setIsFocused(false);
     if (onSearchSubmit) {
       onSearchSubmit();
     } else {
@@ -79,6 +134,7 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
 
   return (
     <div
+      ref={containerRef}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -101,7 +157,7 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
       <button
         type="button"
         onClick={triggerSearchAction}
-        className="absolute left-3.5 text-slate-400 hover:text-[#009245] transition-colors shrink-0 cursor-pointer focus:outline-none"
+        className="absolute left-3.5 text-slate-400 hover:text-[#009245] transition-colors shrink-0 cursor-pointer focus:outline-none z-10"
         title={lang === 'bn' ? 'অনুসন্ধান করুন' : 'Search'}
         aria-label="Search"
       >
@@ -112,6 +168,7 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
       <input
         type="text"
         value={value}
+        onFocus={() => setIsFocused(true)}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -122,6 +179,7 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
               (e.target as HTMLInputElement).blur();
             }
           } else if (e.key === 'Escape') {
+            setIsFocused(false);
             onClose?.();
           }
         }}
@@ -139,11 +197,13 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
       />
 
       {/* Right Action Icons: Clear Text (if any) + Camera / Visual Search Lens */}
-      <div className="absolute right-2 flex items-center gap-1.5">
+      <div className="absolute right-2 flex items-center gap-1.5 z-10">
         {value && (
           <button
             type="button"
-            onClick={() => onChange('')}
+            onClick={() => {
+              onChange('');
+            }}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
             title={lang === 'bn' ? 'মুছে ফেলুন' : 'Clear'}
           >
@@ -165,6 +225,44 @@ export const SearchInputWithImage: React.FC<SearchInputWithImageProps> = ({
           </span>
         </button>
       </div>
+
+      {/* Search History Dropdown Menu */}
+      {isFocused && searchHistory.length > 0 && !value.trim() && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden z-[100] animate-in fade-in slide-in-from-top-2 duration-150 p-2">
+          <div className="flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800/80 mb-1">
+            <span className="flex items-center gap-1">
+              <History className="w-3 h-3 text-[#009245]" />
+              {lang === 'bn' ? 'সাম্প্রতিক অনুসন্ধান' : 'Recent Searches'}
+            </span>
+          </div>
+
+          <div className="max-h-48 overflow-y-auto space-y-0.5">
+            {searchHistory.map((item, idx) => (
+              <div
+                key={`hist-${idx}`}
+                onClick={() => {
+                  onChange(item);
+                  triggerSearchAction();
+                }}
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#009245] transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 truncate pr-2">
+                  <History className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#009245] shrink-0" />
+                  <span className="truncate">{item}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => deleteHistoryItem(e, item)}
+                  className="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors shrink-0"
+                  title={lang === 'bn' ? 'হিস্ট্রি মুছুন' : 'Delete history item'}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Drag Over Overlay Prompt */}
       {isDragOver && (

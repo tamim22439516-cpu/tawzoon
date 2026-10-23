@@ -226,12 +226,18 @@ export const PublicStorefront: React.FC = () => {
     return list;
   }, [filteredProducts, sortOrder]);
 
-  // If any specific category or shop_tab is active, render the dedicated Category Page with the unified Design System!
-  if (publicCategory !== 'all' && publicCategory !== 'wishlist') {
+  const isSearchActive = Boolean(publicSearch && publicSearch.trim().length > 0);
+
+  // If any specific category, shop_tab, OR active search is present, render the dedicated Category Page!
+  if ((publicCategory !== 'all' && publicCategory !== 'wishlist') || isSearchActive) {
+    const slug = (publicCategory !== 'all' && publicCategory !== 'wishlist')
+      ? publicCategory.toLowerCase()
+      : 'shop';
+
     return (
       <div className="min-h-screen bg-[#fafaf9] text-slate-900 pb-20">
         <ShopCategoryPage
-          categorySlug={publicCategory.toLowerCase()}
+          categorySlug={slug}
           products={products}
           loading={loading}
         />

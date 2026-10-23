@@ -28,7 +28,7 @@ import { useApp } from '../../context/AppContext.js';
 import { Product } from '../../types/index.js';
 import { HeroSection } from '../HeroSection.js';
 import { ResellerProductPreviewModal } from './ResellerProductPreviewModal.js';
-import { isCategoryMatch } from '../ShopCategoryPage.js';
+import { isCategoryMatch, getBilingualSearchTerms, normalizeBengali, toCompactKey, findBestMatchingSubsection } from '../ShopCategoryPage.js';
 import { getAdjustedSellingPrice, getAdjustedRegularPrice, getResellerProfitPerUnit, getResellerWholesalePrice } from '../../utils/pricing.js';
 
 interface ResellerCatalogTabProps {
@@ -40,7 +40,7 @@ export const ResellerCatalogTab: React.FC<ResellerCatalogTabProps> = ({
   productsList,
   onTakeForSelling,
 }) => {
-  const { lang, employee, brandSettings, subsections, categories, wishlistItems, toggleWishlist, showToast } = useApp();
+  const { lang, employee, brandSettings, subsections, categories, wishlistItems, toggleWishlist, showToast, publicSearch } = useApp();
 
   // Navigation View: 'public-home' (Public Home Page) | 'reseller-catalog' (Reseller Catalog Panel)
   const [currentView, setCurrentView] = useState<'public-home' | 'reseller-catalog'>('public-home');
@@ -61,6 +61,36 @@ export const ResellerCatalogTab: React.FC<ResellerCatalogTabProps> = ({
   const [downloadingProductId, setDownloadingProductId] = useState<string | null>(null);
   const savedScrollY = React.useRef(0);
   const [lastInteractedProductId, setLastInteractedProductId] = useState<string | null>(null);
+
+  // Sync publicSearch from Header/Global search with Reseller Catalog
+  useEffect(() => {
+    if (publicSearch && publicSearch.trim()) {
+      const q = publicSearch.trim();
+      setSearchQuery(q);
+      setCurrentView('reseller-catalog');
+
+      const matched = findBestMatchingSubsection(q, subsections || []);
+      if (matched) {
+        setSelectedSubCategory(matched.name);
+      } else {
+        let foundSubName: string | null = null;
+        const qComp = toCompactKey(q);
+        const prodMatch = (productsList || []).find(p => {
+          const pSubBn = toCompactKey(p.subcategoryBn);
+          const pSubEn = toCompactKey(p.subcategoryEn);
+          return (pSubBn && (pSubBn === qComp || (qComp.length >= 4 && pSubBn.includes(qComp)))) ||
+                 (pSubEn && (pSubEn === qComp || (qComp.length >= 4 && pSubEn.includes(qComp))));
+        });
+        if (prodMatch && prodMatch.subcategoryBn) {
+          foundSubName = prodMatch.subcategoryBn;
+        }
+        setSelectedSubCategory(foundSubName);
+      }
+    } else if (publicSearch === '') {
+      setSearchQuery('');
+      setSelectedSubCategory(null);
+    }
+  }, [publicSearch, subsections, productsList]);
 
   // Reset to Public Home view whenever bottom nav 'হোম' is clicked
   useEffect(() => {
@@ -289,18 +319,17 @@ export const ResellerCatalogTab: React.FC<ResellerCatalogTabProps> = ({
     );
 
     if (selectedSubCategory) {
-      const sBn = selectedSubCategory.toLowerCase().trim();
+      const sComp = toCompactKey(selectedSubCategory);
       list = list.filter(p => {
-        const pSubBn = (p.subcategoryBn || '').toLowerCase().trim();
-        const pSubEn = (p.subcategoryEn || '').toLowerCase().trim();
-        const pNameBn = (p.nameBn || '').toLowerCase();
-        const pNameEn = (p.nameEn || '').toLowerCase();
+        const pSubBn = toCompactKey(p.subcategoryBn);
+        const pSubEn = toCompactKey(p.subcategoryEn);
+        const pNameBn = toCompactKey(p.nameBn);
+        const pNameEn = toCompactKey(p.nameEn);
         return (
-          pSubBn.includes(sBn) ||
-          sBn.includes(pSubBn) ||
-          pSubEn.includes(sBn) ||
-          pNameBn.includes(sBn) ||
-          pNameEn.includes(sBn)
+          (pSubBn && (pSubBn === sComp || pSubBn.includes(sComp) || sComp.includes(pSubBn))) ||
+          (pSubEn && (pSubEn === sComp || pSubEn.includes(sComp) || sComp.includes(pSubEn))) ||
+          pNameBn.includes(sComp) ||
+          pNameEn.includes(sComp)
         );
       });
     }
@@ -313,32 +342,74 @@ export const ResellerCatalogTab: React.FC<ResellerCatalogTabProps> = ({
         .replace(/\u09DC/g, '\u09A1')
         .replace(/\u09DD/g, '\u09A2');
 
-      const exactCodeProd = list.find(p => {
+      let exactLinkProd: Product | undefined;
+      const isUrl = rawQ.includes('http://') || rawQ.includes('https://') || rawQ.includes('www.') || rawQ.includes('localhost') || rawQ.includes('/product/') || rawQ.includes('/p/') || rawQ.includes('product=') || rawQ.includes('code=');
+
+      if (isUrl) {
+        try {
+          const urlObj = new URL(rawQ.startsWith('http') ? rawQ : `https://${rawQ}`);
+          const paramId = urlObj.searchParams.get('product') || urlObj.searchParams.get('id') || urlObj.searchParams.get('code') || urlObj.searchParams.get('productCode');
+          if (paramId) {
+            const pMatch = list.find(p => p.id === paramId || (p.productCode && p.productCode.toLowerCase().trim().replace(/^#/, '') === paramId.toLowerCase().trim().replace(/^#/, '')));
+            if (pMatch) exactLinkProd = pMatch;
+          }
+          if (!exactLinkProd) {
+            const segments = urlObj.pathname.split('/').filter(Boolean);
+            for (const seg of segments) {
+              const cleanSeg = seg.toLowerCase().trim().replace(/^#/, '');
+              const pMatch = list.find(p => p.id === seg || (p.productCode && p.productCode.toLowerCase().trim().replace(/^#/, '') === cleanSeg));
+              if (pMatch) { exactLinkProd = pMatch; break; }
+            }
+          }
+        } catch {}
+        if (!exactLinkProd) {
+          exactLinkProd = list.find(p => (p.productCode && p.productCode.length >= 2 && rawQ.includes(p.productCode.toLowerCase().trim().replace(/^#/, ''))) || (p.id && p.id.length >= 3 && rawQ.includes(p.id.toLowerCase())));
+        }
+      }
+
+      const exactCodeProd = exactLinkProd || list.find(p => {
         const code = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
-        return code === cleanQ || code === rawQ;
+        const pId = (p.id || '').toLowerCase().trim();
+        return code === cleanQ || code === rawQ || pId === cleanQ || pId === rawQ;
       });
+
+      const termsArray = getBilingualSearchTerms(searchQuery);
+
+      const isClothingSearch = ['shop', 'clothing', 'fashion', 'style', 'পোশাক', 'ফ্যাশন', 'শপ', 'ছেলেদের পোশাক', 'মেয়েদের পোশাক', 'কাপড়'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
+      const isGadgetSearch = ['gadget', 'gadgets', 'tech', 'electronics', 'গ্যাজেট', 'ইলেকট্রনিক্স', 'টেকনোলজি', 'স্মার্ট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
+      const isOtherSearch = ['other', 'others', 'lifestyle', 'অন্যান্য', 'লাইফস্টাইল', 'বই', 'গিফট'].some(term => termsArray.some(t => t.includes(term) || term.includes(t)));
 
       list = list.filter(p => {
         const pCode = (p.productCode || '').toLowerCase().trim().replace(/^#/, '');
-        const pNameBn = (p.nameBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
+        const pId = (p.id || '').toLowerCase().trim();
+        const pNameBn = normalizeBengali(p.nameBn);
         const pNameEn = (p.nameEn || '').toLowerCase();
-        const pSubBn = (p.subcategoryBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
+        const pSubBn = normalizeBengali(p.subcategoryBn);
         const pSubEn = (p.subcategoryEn || '').toLowerCase();
-        const pDescBn = (p.shortDescBn || p.fullDescBn || '').toLowerCase().replace(/\u09DF/g, '\u09AF').replace(/\u09DC/g, '\u09A1').replace(/\u09DD/g, '\u09A2');
+        const pCatSlug = (p.categorySlug || '').toLowerCase();
+        const pDescBn = normalizeBengali(p.shortDescBn || p.fullDescBn || '');
+
+        const matchesCategory =
+          (isClothingSearch && ['shop', 'style', 'fashion', 'lifestyle'].includes(pCatSlug)) ||
+          (isGadgetSearch && ['gajet', 'gadget', 'gadgets', 'tech'].includes(pCatSlug)) ||
+          (isOtherSearch && ['other', 'others'].includes(pCatSlug));
 
         return (
-          pCode.includes(cleanQ) ||
-          pCode.includes(rawQ) ||
-          pNameBn.includes(cleanQ) ||
-          pNameEn.includes(cleanQ) ||
-          pSubBn.includes(cleanQ) ||
-          pSubEn.includes(cleanQ) ||
-          pDescBn.includes(cleanQ)
+          termsArray.some(t =>
+            pCode.includes(t) ||
+            pId === t ||
+            pNameBn.includes(t) ||
+            pNameEn.includes(t) ||
+            pSubBn.includes(t) ||
+            pSubEn.includes(t) ||
+            pCatSlug.includes(t) ||
+            pDescBn.includes(t)
+          ) || matchesCategory
         );
       });
 
       if (exactCodeProd) {
-        list.sort((a, b) => (a.id === exactCodeProd.id ? -1 : b.id === exactCodeProd.id ? 1 : 0));
+        list = [exactCodeProd];
       }
     }
 
@@ -921,9 +992,9 @@ ${desc ? `\n📝 পণ্যের বিবরণ:\n${desc}\n` : ''}
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. DIRECT PARENT GROUPS & SUB-SECTIONS (Strictly 2 per row on mobile) */}
+      {/* 2. DIRECT PARENT GROUPS & SUB-SECTIONS (Only when no search is active) */}
       {/* ------------------------------------------------------------- */}
-      {selectedSubCategory === null && currentCategoryConfig.groups.length > 0 && (
+      {selectedSubCategory === null && !searchQuery.trim() && currentCategoryConfig.groups.length > 0 && (
         <div className="space-y-3 sm:space-y-4">
           {currentCategoryConfig.groups.map((group) => (
             <div
@@ -1005,29 +1076,64 @@ ${desc ? `\n📝 পণ্যের বিবরণ:\n${desc}\n` : ''}
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. SUB-CATEGORY BREADCRUMB BAR (When a section is selected)   */}
+      {/* 3. SUB-CATEGORY BREADCRUMB & TOOLBAR (When a category/section is selected) */}
       {/* ------------------------------------------------------------- */}
       {selectedSubCategory !== null && (
-        <div className="bg-white rounded-xl sm:rounded-2xl border border-emerald-100 p-2.5 sm:p-3 shadow-2xs flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            <button
-              type="button"
-              onClick={() => setSelectedSubCategory(null)}
-              className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-bold text-[#009245] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg sm:rounded-xl inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-            >
-              <ChevronLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              <span>{lang === 'bn' ? 'ব্যাক' : 'Back'}</span>
-            </button>
+        <div className="space-y-2">
+          {/* Breadcrumb Bar */}
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-2 sm:p-2.5 shadow-2xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => setSelectedSubCategory(null)}
+                className="px-2.5 py-1 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0 active:scale-95"
+              >
+                <ChevronLeft className="w-3.5 h-3.5 text-slate-600" />
+                <span>{lang === 'bn' ? 'ফিরে যান' : 'Back'}</span>
+              </button>
 
-            <nav className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-slate-600 truncate">
-              <span className="text-slate-400">/</span>
-              <span className="text-[#009245] font-black truncate">{selectedSubCategory}</span>
-            </nav>
+              <nav className="flex items-center gap-1 text-xs font-medium text-slate-600 truncate">
+                <span className="text-slate-400">🏠 {lang === 'bn' ? 'হোম' : 'Home'}</span>
+                <span className="text-slate-400">&gt;</span>
+                <span className="text-slate-500 uppercase">SHOP — STYLE</span>
+                <span className="text-slate-400">&gt;</span>
+                <span className="text-[#009245] font-bold truncate">{selectedSubCategory}</span>
+              </nav>
+            </div>
           </div>
 
-          <span className="text-[10px] sm:text-xs font-bold text-slate-500 shrink-0">
-            {displayProducts.length} {lang === 'bn' ? 'টি পণ্য' : 'items'}
-          </span>
+          {/* Category Title & Filter Controls Bar */}
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-2.5 sm:p-3 shadow-2xs flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm sm:text-base md:text-lg font-black text-slate-900 tracking-tight">
+                {selectedSubCategory}
+              </h2>
+              <span className="bg-emerald-50 text-[#009245] text-xs font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-200">
+                {displayProducts.length} {lang === 'bn' ? 'টি পণ্য' : 'items'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsSideCatalogOpen(true)}
+                className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-emerald-50 hover:text-[#009245] border border-slate-200 rounded-xl inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-[#009245]" />
+                <span>{lang === 'bn' ? 'ক্যাটাগরি' : 'Category'}</span>
+              </button>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-3 py-1.5 text-xs font-bold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl outline-none focus:border-[#009245] cursor-pointer"
+              >
+                <option value="popular">{lang === 'bn' ? 'জনপ্রিয়তা' : 'Popularity'}</option>
+                <option value="price-low">{lang === 'bn' ? 'দাম: কম থেকে বেশি' : 'Price: Low to High'}</option>
+                <option value="price-high">{lang === 'bn' ? 'দাম: বেশি থেকে কম' : 'Price: High to Low'}</option>
+              </select>
+            </div>
+          </div>
         </div>
       )}
 
